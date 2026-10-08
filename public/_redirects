@@ -1,3 +1,0 @@
-# Cloudflare Pages redirects. The host-level rule only takes effect once
-# www.resolvd.dev is attached to the project as a custom domain.
-https://www.resolvd.dev/* https://resolvd.dev/:splat 301
