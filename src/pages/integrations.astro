@@ -1,0 +1,384 @@
+---
+import Layout from "../layouts/Layout.astro";
+import FeatureFooter from "../components/FeatureFooter.astro";
+
+const TROVE = "https://trove-kb.com/";
+
+const code = (s: string) =>
+  s.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>');
+
+const troveGroups = [
+  {
+    title: "Browse in Resolvd",
+    body: "A full reader at `/kb`, not a search box. Users don't need a Trove KB account to read internal docs inside Resolvd.",
+    items: [
+      "Collections as cards, mapped Internal / Public / Hidden per collection in Admin",
+      "Category and subcategory rail with counts, built from Trove KB's flat pairs",
+      "Type filter: Articles vs. Runbooks, plus source format once Trove KB reports it",
+      "Cards or list, remembered per browser. Sort by title or last modified, cursor paging",
+      "Search scoped to the collection, or across every mapped collection from `/kb`",
+      "Markdown reader at `/kb/article/:id` with breadcrumbs back into the tree",
+      "Favorites and helpful votes act for the reader's email, the same row as on the public Trove KB site. `/kb` lists My favorites",
+    ],
+  },
+  {
+    title: "On the ticket",
+    body: "The Trove KB block inside every ticket's Knowledge panel.",
+    items: [
+      "Linked articles, title and collection snapshotted so the ticket reads right when Trove KB is down",
+      "Title-based suggestions that search the project's mapped collection first, with an OR fallback when the exact query finds nothing",
+      "Search-to-link for everything else",
+      "Resolution draft: an extractive digest always (matched passage, link, runbook steps), plus an AI summary when the caller may use AI Assist",
+      "Knowledge briefs: Scope with knowledge assembles reported / team / draft / corrections / project context / matched articles into a reviewable form. Build without AI, or rewrite with AI under rules that keep internal articles out of the reply",
+      "Noise filter: admin-managed regex, literal, or account rules keep SLA notices, moves, merges, and auto-replies out of briefs. Test box included",
+      "Promote-to-KB upserts a resolved ticket into the project's collection as an internal-only draft keyed `resolvd:ticket:<id>`",
+      "Every AI-assisted run is stored with its inputs and output for audit",
+    ],
+  },
+  {
+    title: "Runbooks",
+    body: "The checklist lives in Trove KB. The progress lives in Resolvd.",
+    items: [
+      "A runbook is a Trove KB article with `kind: runbook`; Trove KB derives `steps[]` with stable ids on save",
+      "Resolvd keeps checkbox state per ticket keyed by step id. Hand off mid-incident, the next handler picks up at the unchecked box",
+      "Step toggles use a Postgres `jsonb ||` merge so concurrent handlers don't clobber each other",
+      "A step's `canned` field becomes a 📋 pill that prefills the composer with the canned response, placeholders substituted",
+      "Recurring ticket schedules can name a runbook and start a run on every fire",
+    ],
+  },
+  {
+    title: "Visibility",
+    body: "Resolvd never forwards a user's Trove KB session. One key, Resolvd's own roles.",
+    items: [
+      "Project handlers (global Admin / Manager / Tech, or a project handler override / Agent flag) see internal + public",
+      "Everyone else sees public collections only, and only articles Trove KB confirms public",
+      "`audience=public` is sent on non-handler reads when Trove KB's OpenAPI declares it; otherwise Resolvd keeps only hits with a `public_url`",
+      "Strict mode (default on): a non-handler sees an article only when Trove KB returns it as public",
+      "Cache keys carry the audience so handler and public views never mix",
+      "Only Resolvd Admins get Open in Trove KB links into the staff UI",
+    ],
+  },
+  {
+    title: "Kept in step",
+    body: "Webhooks first, polling as the floor.",
+    items: [
+      "`POST /api/trove-kb/webhook` receives `kb.article.upserted` / `kb.article.archived`. Raw body, `X-Trove-Signature` HMAC-SHA256 checked in constant time, secret stored encrypted",
+      "60 s result cache, 12 s request timeout. Errors never carry the key",
+      "Collection sync hourly, on Test connection, and on demand. New public collections auto-map Public when the toggle is on; Hidden is never undone",
+      "Nightly snapshot refreshes titles and collection names on links and runbook runs",
+      "Feature probe reads Trove KB's OpenAPI every five minutes. Favorites, votes, and `audience` light up when declared",
+      "Check for changes now polls on demand from Admin",
+    ],
+  },
+  {
+    title: "Admin + migration",
+    body: "Admin → Integrations → Trove KB. Five fields, one key. Side by side with the local KB, or replacing it.",
+    items: [
+      "Base URL, public site URL, API key (encrypted at rest under `RESOLVD_MASTER_KEY`), enabled, strict public mode, auto-map public, webhook secret",
+      "Test connection pulls the collection list; map each Internal / Public / Hidden",
+      "Local KB checkbox: keep the built-in KB beside Trove KB, or switch it off and back on without migrating",
+      "Project ↔ collection in Admin → AI Assist → Project contexts: the collection each project searches first and promotes into",
+      "Optional. Replace local KB shows the plan first (twins by `external_id`, links, runs, step coverage), then copies links, re-keys runbook progress to Trove KB step ids, archives local articles, and turns the local KB off",
+      "Local tables are kept one release for rollback. An export script turns BlockNote JSON into Markdown + frontmatter in Trove KB's import layout",
+    ],
+  },
+];
+
+const troveRequirements = [
+  { k: "Trove KB", v: "`v0.1.0` or later, any build with `/api/v1/kb/*` routes. Free and open source under the AGPL. Docker Compose + Postgres, or a Cloudflare Worker." },
+  { k: "API key", v: "`read` scope, read grants on every collection Resolvd should see, a `write` grant only on the collection ticket promotions land in." },
+  { k: "Identity", v: "Both apps on the same identity provider. Email is the join key for favorites and votes." },
+  { k: "Network", v: "Resolvd calls Trove KB's base URL over HTTPS. Trove KB posts webhooks to Resolvd's `/api/trove-kb/webhook`." },
+  { k: "Resolvd", v: "`v0.10.0` or later. The built-in KB stays; moving off it is optional." },
+];
+
+const connectors = [
+  {
+    name: "Action1",
+    kind: "RMM connector",
+    body: "REST poll with OAuth2 client credentials. Feeds alerts, inventory endpoints, installed software, security posture (patches, vulnerabilities, reboot required), and companies. Per-source token-bucket rate limit, custom-attribute slots mapped to asset columns or custom fields.",
+    where: "Admin → Alert sources",
+    href: "/inventory/",
+    footnote: true,
+  },
+  {
+    name: "Zabbix",
+    kind: "Monitoring adapter",
+    body: "Webhook intake for problem fire / clear, optional REST backfill for historical context, hostgroup → project routing per source.",
+    where: "Admin → Alert sources",
+    href: "/alerts/",
+  },
+  {
+    name: "Generic webhook",
+    kind: "Alert adapter",
+    body: "Any alert source that can POST JSON. A tabular field-map editor turns its payload into severity, host, title, and clear events, then the same rules engine decides promote / notify-only / ignore.",
+    where: "Admin → Alert sources",
+    href: "/alerts/",
+  },
+  {
+    name: "Microsoft 365 (Graph)",
+    kind: "Email backend",
+    body: "OAuth through the same Entra app registration that powers SSO. Inbox monitoring over Graph `/subscriptions` with `clientState` validation, self-healing renewals, outbound send from a named mailbox. Refresh tokens encrypted under the workspace key.",
+    where: "Admin → Email backends",
+    href: "/email/",
+  },
+  {
+    name: "Gmail API",
+    kind: "Email backend",
+    body: "OAuth inbox + send for Google Workspace. Same inbound pipeline: dedup, signature and reply-marker stripping, banner-strip presets, project-scoped mailboxes.",
+    where: "Admin → Email backends",
+    href: "/email/",
+  },
+  {
+    name: "SMTP",
+    kind: "Email backend",
+    body: "For self-hosters where OAuth isn't an option. STARTTLS with app passwords. Outbound notifications, digests, and vendor mail.",
+    where: "Admin → Email backends",
+    href: "/email/",
+  },
+  {
+    name: "Microsoft Entra ID",
+    kind: "Identity",
+    body: "SSO via MSAL, directory lookup for user auto-provision and UPN matching, deep-link return after sign-in. TOTP MFA per role on top.",
+    where: "Admin → Authentication",
+    href: "/install/",
+  },
+  {
+    name: "Google OAuth",
+    kind: "Identity",
+    body: "SSO for Google Workspace tenants with directory-backed auto-provision. Local accounts with Argon2id remain available alongside either provider.",
+    where: "Admin → Authentication",
+    href: "/install/",
+  },
+  {
+    name: "OpenAI · Anthropic · Ollama",
+    kind: "AI providers",
+    body: "Bring your own key for AI Assist: OpenAI and OpenAI-compatible endpoints (Azure OpenAI, OpenRouter, vLLM, LM Studio), Anthropic's Messages API, or a local Ollama with no key at all. Org key with lock, or per-user BYOK.",
+    where: "Admin → AI Assist",
+    href: "/ai/",
+  },
+  {
+    name: "Zebra / ZPL label printers",
+    kind: "Hardware",
+    body: "Raw TCP to port `9100`. Asset and consumable labels with a QR that scans back to the Resolvd row; consumables allocate stock on print.",
+    where: "Admin → Label printer",
+    href: "/consumables/",
+  },
+  {
+    name: "Web Push (VAPID)",
+    kind: "Browser",
+    body: "Browser push through a service worker, one of the three channels in the per-event notification matrix beside in-app and email.",
+    where: "Notification settings",
+  },
+];
+---
+
+<Layout title="Integrations — Resolvd" description="Everything Resolvd connects to: Trove KB as a direct, purpose-built knowledge base integration with the full feature list, plus Action1, Zabbix, generic webhooks, Microsoft 365 Graph, Gmail, SMTP, Entra ID, Google OAuth, OpenAI, Anthropic, Ollama, ZPL label printers, and Web Push.">
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
+      <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
+        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)] shadow-[0_0_8px_var(--color-brand)]"></span>
+        Integrations
+      </span>
+      <h1 class="mt-2 text-4xl md:text-6xl font-bold tracking-tight leading-[1.05]">
+        Wired into <span class="text-[var(--color-brand)]">what you already run</span>.
+      </h1>
+      <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
+        One direct integration built for Resolvd, and a set of connectors for the RMM, mail, identity, and AI providers a self-hosted helpdesk meets every day. Every one configured in Admin, none of them a SaaS in the loop.
+      </p>
+      <div class="mt-8 flex flex-col sm:flex-row gap-3">
+        <a href="#trove-kb" class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-5 py-3 text-sm font-semibold text-[#062814] shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:bg-[var(--color-brand-bright)] transition">
+          Trove KB direct integration
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </a>
+        <a href="#connectors" class="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-5 py-3 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+          All connectors
+        </a>
+      </div>
+    </div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-[500px] -z-10 opacity-[0.04]" style="background-image: linear-gradient(to right, var(--color-fg-strong) 1px, transparent 1px), linear-gradient(to bottom, var(--color-fg-strong) 1px, transparent 1px); background-size: 32px 32px;"></div>
+  </section>
+
+  <section id="trove-kb" class="border-t border-[var(--color-border)] scroll-mt-20">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="rounded-2xl border-2 border-[var(--color-brand)] bg-[var(--color-surface)] p-6 md:p-10 shadow-[0_0_40px_rgba(34,197,94,0.12)] overflow-hidden">
+        <div class="grid md:grid-cols-5 gap-10 items-start [&>*]:min-w-0">
+          <div class="md:col-span-3">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="inline-flex items-center gap-2 rounded-md bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#062814]">Direct integration</span>
+              <span class="inline-flex items-center rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-fg-dim)]">Built for Resolvd</span>
+              <span class="font-mono text-xs text-[var(--color-fg-dim)]">since v0.10.0</span>
+            </div>
+            <h2 class="mt-4 text-3xl md:text-4xl font-bold tracking-tight">
+              <a href={TROVE} target="_blank" rel="noopener" class="hover:text-[var(--color-brand)] transition">Trove KB</a>, <span class="text-[var(--color-brand)]">beside the built-in KB or in place of it.</span>
+            </h2>
+            <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+              Trove KB is our open-source IT documentation platform: companies, locations, and devices as typed documents, a knowledge base that imports or crawls vendor docs, runbooks with stable step ids, secret fields that point at your vault instead of storing credentials. Resolvd ships its own basic per-project KB. Trove KB is an add-on: switch it on and both run side by side, the local panel and the Trove KB block on every ticket. Or run Replace local KB and Trove KB takes over. Admin's call.
+            </p>
+            <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+              The integration is tailor-made for Resolvd, down to runbook progress keyed by Trove KB step ids and ticket promotions that land as drafts in the right collection. It still runs over Trove KB's public REST API, OpenAPI spec, and HMAC-signed webhooks, so nothing about it is private to Resolvd.
+            </p>
+            <div class="mt-6 flex flex-col sm:flex-row flex-wrap gap-3">
+              <a href="/kb/" class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-sm font-semibold text-[#062814] hover:bg-[var(--color-brand-bright)] transition">
+                Knowledge Base feature page
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+              </a>
+              <a href={TROVE} target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+                trove-kb.com
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+              </a>
+              <a href="/docs/v0.10.0/kb/" class="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+                Setup docs
+              </a>
+            </div>
+          </div>
+          <div class="md:col-span-2">
+            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Requirements</span>
+            <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] divide-y divide-[var(--color-border)]">
+              {troveRequirements.map(r => (
+                <div class="px-4 py-3">
+                  <span class="font-mono text-xs text-[var(--color-brand)]">{r.k}</span>
+                  <p class="mt-1 text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={code(r.v)}></p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-10">
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Full feature list</span>
+          <div class="mt-3 grid md:grid-cols-2 gap-4 [&>*]:min-w-0">
+            {troveGroups.map(g => (
+              <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+                <h3 class="font-semibold text-[var(--color-fg-strong)]">{g.title}</h3>
+                <p class="mt-1 text-sm text-[var(--color-fg-dim)] leading-relaxed" set:html={code(g.body)}></p>
+                <ul class="mt-3 space-y-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+                  {g.items.map(i => (
+                    <li class="flex gap-2"><span class="text-[var(--color-brand)] shrink-0">✓</span><span set:html={code(i)}></span></li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div class="mt-10 grid md:grid-cols-2 gap-6 items-start [&>*]:min-w-0">
+          <div>
+            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Resolvd → Trove KB</span>
+            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              Resolvd reads over <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">/api/v1/kb/*</code> with one bearer key: collections, search, articles with <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">steps</code>, favorites and votes for a named reader, and one upsert route for Promote-to-KB. Trove KB posts back over two webhook events. The surface Resolvd exposes to its own frontend:
+            </p>
+            <pre class="code-block mt-4 text-left max-w-full" is:raw><span class="k">GET</span>    /api/trove-kb/status
+<span class="k">GET</span>    /api/trove-kb/collections[/:id]
+<span class="k">GET</span>    /api/trove-kb/articles[/:id]      <span class="c"># ?collection_id ?category ?kind ?sort ?cursor</span>
+<span class="k">GET</span>    /api/trove-kb/search?q=
+<span class="k">GET</span>    /api/trove-kb/runbooks
+<span class="k">GET</span>    /api/trove-kb/tickets/:id/links | suggestions
+<span class="k">POST</span>   /api/trove-kb/tickets/:id/resolution-draft
+<span class="k">POST</span>   /api/trove-kb/tickets/:id/assist/brief | compose
+<span class="k">POST</span>   /api/trove-kb/tickets/:id/promote
+<span class="k">GET</span>    /api/trove-kb/tickets/:id/runbook-runs
+<span class="k">POST</span>   /api/trove-kb/webhook             <span class="c"># Trove KB → Resolvd, HMAC-SHA256</span></pre>
+          </div>
+          <div>
+            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Who owns what</span>
+            <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] divide-y divide-[var(--color-border)]">
+              {[
+                { what: "Trove KB articles, runbooks, categories, collections, public vs. internal", who: "Trove KB" },
+                { what: "Authoring, imports, vendor-doc crawls, favorites, helpful votes", who: "Trove KB" },
+                { what: "Credentials. Trove KB stores none; secret fields reference your vault", who: "Your vault" },
+                { what: "Built-in per-project articles and runbooks, while the local KB stays on", who: "Resolvd" },
+                { what: "Which articles and runbooks are linked to a ticket", who: "Resolvd" },
+                { what: "Runbook step progress per ticket", who: "Resolvd" },
+                { what: "Resolution summaries, knowledge briefs, AI drafts and their audit log", who: "Resolvd" },
+                { what: "Who in Resolvd sees internal vs. public content", who: "Resolvd" },
+              ].map(r => (
+                <div class="px-4 py-2.5 flex items-start gap-3">
+                  <span class="font-mono text-xs text-[var(--color-brand)] shrink-0 min-w-[9ch] mt-0.5">{r.who}</span>
+                  <p class="min-w-0 flex-1 text-sm text-[var(--color-fg-muted)] leading-relaxed">{r.what}</p>
+                </div>
+              ))}
+            </div>
+            <p class="mt-4 text-xs text-[var(--color-fg-dim)] leading-relaxed">
+              Resolvd never sees a secret through the integration. Neither does an AI assistant reading Trove KB over its MCP endpoint.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="connectors" class="border-t border-[var(--color-border)] scroll-mt-20">
+    <div class="mx-auto max-w-6xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Connectors</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Everything else <span class="text-[var(--color-brand)]">Resolvd talks to</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          Configured in Admin, credentials encrypted at rest, each one documented on its feature page.
+        </p>
+      </div>
+      <div class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {connectors.map(c => {
+          const Tag = c.href ? "a" : "div";
+          return (
+            <Tag {...(c.href ? { href: c.href } : {})} class={`group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition ${c.href ? "hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-2)] block" : ""}`}>
+              <div class="flex items-start justify-between gap-3">
+                <h3 class="font-semibold text-[var(--color-fg-strong)]">{c.name}{c.footnote && <sup class="text-[var(--color-brand)] ml-0.5">*</sup>}</h3>
+                <span class="shrink-0 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-dim)]">{c.kind}</span>
+              </div>
+              <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={code(c.body)}></p>
+              <div class="mt-3 flex items-center justify-between gap-3 text-xs">
+                <span class="font-mono text-[var(--color-fg-dim)]">{c.where}</span>
+                {c.href && (
+                  <span class="inline-flex items-center gap-1 font-semibold text-[var(--color-brand)] opacity-80 group-hover:opacity-100 transition">
+                    Learn more
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="group-hover:translate-x-0.5 transition-transform"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                  </span>
+                )}
+              </div>
+            </Tag>
+          );
+        })}
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Bring your own</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Not on the list? <span class="text-[var(--color-brand)]">Two doors in.</span></h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Alert adapters live in a registry. Each one declares a <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">credentialsSchema</code> that the Admin add-source form renders on its own, so onboarding another RMM with a webhook-flavored alert format is a registry entry, not a UI change.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Until then, the generic webhook adapter takes any JSON payload and a field map. Rules, dedup, promotion, and the dashboard widget work the same as for a named vendor.
+          </p>
+        </div>
+        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+          <div class="rounded-lg bg-[#050810] p-5 font-mono text-xs leading-relaxed text-[#cbd5e1]">
+            <div class="text-[var(--color-fg-dim)]"># services/integrations/registry.js</div>
+            <div class="mt-3">
+              <span class="text-violet-300">id:</span> <span class="text-emerald-300">"your-rmm"</span><br />
+              <span class="text-violet-300">mode:</span> <span class="text-emerald-300">"webhook"</span> <span class="text-[var(--color-fg-dim)]">| "rest_poll"</span><br />
+              <span class="text-violet-300">credentialsSchema:</span><br />
+              <span class="ml-4">- <span class="text-violet-300">name:</span> <span class="text-emerald-300">api_token</span>  <span class="text-violet-300">kind:</span> <span class="text-emerald-300">secret</span>  <span class="text-violet-300">required:</span> <span class="text-emerald-300">true</span></span><br />
+              <span class="text-violet-300">map:</span> <span class="text-[var(--color-fg-dim)]">payload → severity · host · title · clear</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <FeatureFooter currentHref="/integrations/" heading="Plug it in." subhead="Admin → Integrations. Trove KB takes a URL and a key; the rest take a credential and a toggle." />
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-4xl px-6 py-12">
+      <p class="text-xs text-[var(--color-fg-dim)] leading-relaxed">
+        <sup class="text-[var(--color-brand)]">*</sup> The Action1 integration is an independent community project and is not affiliated with, endorsed by, sponsored by, or supported by Action1 Corporation. Action1 has not reviewed, tested, certified, or audited this integration for security, performance, or compliance purposes and is not responsible for its operation, availability, or use. &ldquo;Action1&rdquo; is a trademark of Action1 Corporation and is used solely to identify compatibility with the Action1 platform.
+      </p>
+    </div>
+  </section>
+</Layout>
