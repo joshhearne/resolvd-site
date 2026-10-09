@@ -2,76 +2,238 @@
 import Layout from "../layouts/Layout.astro";
 import FeatureFooter from "../components/FeatureFooter.astro";
 
-const editorBlocks = [
-  { name: "Headings",  body: "H1 / H2 / H3 with anchor links auto-generated from slug." },
-  { name: "Lists",     body: "Bulleted, numbered, and checkbox. Nestable." },
-  { name: "Code",      body: "Inline and fenced blocks with syntax highlighting." },
-  { name: "Callouts",  body: "Info / warning / tip / danger variants." },
-  { name: "Tables",    body: "ProseMirror-backed, drag to reorder rows or columns." },
-  { name: "Images",    body: "Drag-drop upload — stored alongside ticket attachments under FSL terms." },
+const TROVE = "https://trove-kb.com/";
+
+const builtIn = [
+  { title: "BlockNote editor",        body: "Rich text, headings, lists, code, callouts. Slash-command to insert a block, drag to reorder. Stored as JSON with a plain-text mirror for search." },
+  { title: "Version history",         body: "Every save snapshots into `kb_article_versions` with an optional change summary. One-click restore writes a new version, so the audit chain never breaks." },
+  { title: "Tickets ↔ articles",      body: "A pg_trgm ranker over title, tags, and keywords surfaces matching articles when a ticket opens. Promote-to-KB drafts an article from any resolved ticket." },
+  { title: "Agent-only + runbooks",   body: "Flip `agent_only` and non-handlers never see the article. A `kind='runbook'` article drives a per-ticket checklist with canned-response pills." },
 ];
 
-const lifecycle = [
-  { evt: "Draft saved",            action: "Article persists to `kb_articles.content_json` with a plain-text mirror for full-text search." },
-  { evt: "Publish",                action: "Article becomes visible to readers in the project. Submitter / Viewer roles see the rendered surface; never the editor." },
-  { evt: "Edit + save",            action: "New row in `kb_article_versions` with optional change_summary. Old version stays restorable." },
-  { evt: "Restore old version",    action: "Writes a new version row marked `Restored from vN`. Audit chain stays intact — no destructive overwrite." },
-  { evt: "Archive",                action: "Hidden from listings but kept in storage. Tech / Manager / Admin can resurrect." },
+const ownership = [
+  {
+    who: "Trove KB owns",
+    items: [
+      "Articles, runbooks, categories, and collections",
+      "Public vs. internal per article and per collection",
+      "Authoring: Markdown editor, imports, vendor-doc crawls",
+      "Favorites and helpful votes, keyed by the reader's email",
+      "Credentials stay in your vault — Trove KB stores no secrets",
+    ],
+  },
+  {
+    who: "Resolvd owns",
+    items: [
+      "Its own per-project articles and runbooks, for as long as you keep the local KB on",
+      "Which articles and runbooks are linked to a ticket",
+      "Runbook step progress per ticket, who ticked what and when",
+      "Resolution summaries, knowledge briefs, and AI drafts",
+      "Who in Resolvd sees internal vs. public content",
+      "Collection mapping, cache, and the webhook receiver",
+    ],
+  },
+];
+
+const browse = [
+  { name: "Collections",   body: "/kb lists every collection the key can read as cards. Public and internal are mapped per collection in Admin; Hidden keeps one out of Resolvd entirely." },
+  { name: "Categories",    body: "A collection opens to a category / subcategory rail with counts, built from Trove KB's flat pairs. Breadcrumbs on an article link back into the tree." },
+  { name: "Type filter",   body: "Articles vs. Runbooks, plus source format (PDF, Word, native) once Trove KB reports it. Shown only when there is a choice." },
+  { name: "Cards or list", body: "Toggle per browser, remembered. Sort by title or last modified; cursor paging for the long tail." },
+  { name: "Search",        body: "Scoped to the collection you are in, or across every mapped collection from /kb. One call when the key reads everything; fan-out otherwise." },
+  { name: "Favorites",     body: "Star an article or vote it helpful in Resolvd and it is the same row the person has on the public Trove KB site. /kb lists My favorites." },
 ];
 
 const ticketSurfaces = [
-  { title: "Suggestion ranker",     body: "pg_trgm similarity over `title || tags || keywords` vs the ticket title. High-confidence matches auto-surface in the Resolution tab on ticket open." },
-  { title: "Promote-to-KB",          body: "Drafts a new article seeded from the ticket's title + description + resolution_summary, with a `kind='system'` link back to the source ticket." },
-  { title: "Resolution summary nudge", body: "At close time, a small prompt asks the closer to capture a one-line resolution summary. Drives the new \"Fix applied\" filter on the ticket list (`resolution_summary IS NOT NULL OR kb_link EXISTS`)." },
+  { title: "Links + suggestions",  body: "The Trove KB block on every ticket's Knowledge panel: linked articles (title and collection snapshotted so the ticket still reads right if Trove KB is down), title-based suggestions searching the project's mapped collection first, and search-to-link for everything else." },
+  { title: "Resolution draft",     body: "Two tiers from the same inputs. An extractive digest, no AI, always: per article the matched passage, link, and runbook steps. An AI summary on top when the caller may use AI Assist — synthesizes ticket + articles into a short write-up with steps citing their source." },
+  { title: "Knowledge briefs",     body: "\"Scope with knowledge\" on the comment composer. Resolvd assembles what the user reported, what the team said, the tech's draft and corrections, the project context, and matched articles into a reviewable form. Build without AI by default, or rewrite with AI under rules that keep internal articles out of the reply." },
+  { title: "Promote-to-KB",        body: "A resolved ticket's fix upserts into the project's collection as an internal-only draft (category = project, subcategory Drafts) keyed `resolvd:ticket:<id>`. Needs the API key's write scope and a write grant on that collection." },
 ];
 
-const agentOnlyRules = [
-  { who: "Read",                  rule: "Project handlers only — global Admin / Manager / Tech, or any project member with a handler role override or Agent flag on the article's project." },
-  { who: "List + search",         rule: "Filtered out for non-handlers. 404 on direct slug fetch — keeps the slug invisible rather than leaking via 403." },
-  { who: "Edit",                  rule: "Same gate as read. Tech / Manager with project-handler access can rewrite freely." },
-  { who: "Tag aggregation",       rule: "Agent-only tags excluded from the global tag chip row so topic hints don't leak to unprivileged users." },
-  { who: "Ticket suggestion + links", rule: "Hidden for non-handlers in the Resolution tab ranker and the ticket↔KB link list." },
-  { who: "Delete",                rule: "Admin only. Tech / Manager handlers can read + write but can't delete an agent-only article." },
+const visibilityRules = [
+  { who: "Project handlers",    rule: "Global Admin / Manager / Tech, or a project member with a handler override or Agent flag. See internal + public collections, every article the key reads." },
+  { who: "Everyone else",       rule: "Public collections only, and only articles Trove KB confirms public. Resolvd sends audience=public on their reads so Trove KB's hold-back rules apply server-side." },
+  { who: "Strict mode",         rule: "On by default. A non-handler sees an article only when Trove KB returns it as public. Off = trust the whole Public collection, held-back included." },
+  { who: "Older Trove KB",      rule: "If the instance doesn't declare audience in its OpenAPI, Resolvd falls back to fetching each hit and keeping only those with a public_url. Cache keys carry the audience so views never mix." },
+  { who: "Links out",           rule: "Only Resolvd Admins get \"Open in Trove KB\" links into the staff UI. Everyone else reads in-app or via the public site." },
+  { who: "Nothing mapped",      rule: "Handlers see everything the key reads; non-handlers see nothing. Mapping is an explicit admin step." },
 ];
 
+const sync = [
+  { evt: "Webhook",            action: "Trove KB POSTs `kb.article.upserted` / `kb.article.archived` to `/api/trove-kb/webhook`. Raw body, `X-Trove-Signature` HMAC-SHA256 checked in constant time against a secret stored encrypted. Drops the cached article + search results, records the delivery, answers 204." },
+  { evt: "Result cache",       action: "60 s on reads, 12 s request timeout. Errors never carry the key. One click on \"Check for changes now\" polls Trove KB on demand." },
+  { evt: "Collection sync",    action: "Hourly, on Test connection, and on demand. New public collections auto-map Public when the toggle is on; anything else waits for an admin. A Hidden choice is never undone by the sync." },
+  { evt: "Nightly snapshot",   action: "Titles and collection names on ticket links and runbook runs refresh every night so tickets read right even when Trove KB is unreachable." },
+  { evt: "Feature probe",      action: "Resolvd reads Trove KB's OpenAPI every five minutes. Favorites, votes, and `audience` light up when the routes are declared, and hide when they aren't." },
+];
+
+const setupSteps = [
+  { step: "1. Create an API key in Trove KB", body: "`read` scope, read grants on the collections Resolvd should see, a write grant only on the collection ticket promotions land in." },
+  { step: "2. Admin → Integrations → Trove KB", body: "Base URL, public site URL, the key (encrypted at rest under `RESOLVD_MASTER_KEY`). Test connection pulls the collection list." },
+  { step: "3. Map collections", body: "Internal / Public / Hidden per collection. Public ones auto-map if you leave the toggle on." },
+  { step: "4. Project ↔ collection", body: "Admin → AI Assist → Project contexts: pick the Trove KB collection each project searches first and promotes into." },
+  { step: "5. Webhook secret", body: "Generate or paste a secret, register the endpoint in Trove KB. The pane shows the last delivery." },
+];
 ---
 
-<Layout title="Knowledge Base — Resolvd" description="Per-project knowledge base with a BlockNote rich editor, version history, ticket↔article linking, pg_trgm suggestion ranker, one-click Promote-to-KB, agent-only visibility tier, and runbook articles that drive checklists on tickets with canned-response pills.">
+<Layout title="Knowledge Base — Resolvd" description="Resolvd uses Trove KB as its knowledge base: browse collections and categories in-app, link articles and runbooks to tickets, track runbook steps per ticket, draft resolutions and knowledge briefs from matched articles, and keep it all in step over REST and signed webhooks.">
   <section class="relative overflow-hidden">
     <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
       <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
         <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)] shadow-[0_0_8px_var(--color-brand)]"></span>
-        Knowledge Base
+        Knowledge Base · built in, Trove KB optional
       </span>
       <h1 class="mt-2 text-4xl md:text-6xl font-bold tracking-tight leading-[1.05]">
-        Tribal knowledge, <span class="text-[var(--color-brand)]">captured.</span>
+        Built in. <span class="text-[var(--color-brand)]">Or plug in Trove KB.</span>
       </h1>
       <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
-        Every project owns its own articles. Editors author in BlockNote — a block editor built on ProseMirror — and readers see a rendered surface that matches the Resolvd theme. Articles tie back to tickets through a suggestion ranker and a Promote-to-KB button on every resolved ticket.
+        Resolvd ships a basic per-project knowledge base: BlockNote articles and runbooks, version history, a suggestion ranker on tickets, Promote-to-KB. When your docs outgrow it, point Resolvd at
+        <a href={TROVE} target="_blank" rel="noopener" class="text-[var(--color-brand)] hover:underline">Trove KB</a>
+        — our IT documentation platform — over its REST API with one key, and decides on its own side who sees what. Vendor manuals, client docs, and runbooks live in one place. Run both side by side, or let Trove KB replace the local KB. Admin's call.
       </p>
+      <div class="mt-8 flex flex-col sm:flex-row gap-3">
+        <a href={TROVE} target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-5 py-3 text-sm font-semibold text-[#062814] shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:bg-[var(--color-brand-bright)] transition">
+          Meet Trove KB
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </a>
+        <a href="https://trove-kb.com/integrations/" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-5 py-3 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+          API, webhooks + MCP
+        </a>
+      </div>
     </div>
     <div class="pointer-events-none absolute inset-x-0 top-0 h-[500px] -z-10 opacity-[0.04]" style="background-image: linear-gradient(to right, var(--color-fg-strong) 1px, transparent 1px), linear-gradient(to bottom, var(--color-fg-strong) 1px, transparent 1px); background-size: 32px 32px;"></div>
+  </section>
+
+  <section id="notice" class="border-t border-[var(--color-brand)]/40 bg-[var(--color-brand)]/5">
+    <div class="mx-auto max-w-5xl px-6 py-10">
+      <div class="rounded-2xl border-2 border-[var(--color-brand)] bg-[var(--color-surface)] p-6 md:p-8 shadow-[0_0_40px_rgba(34,197,94,0.15)]">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="inline-flex items-center gap-2 rounded-md bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#062814]">Feature notice</span>
+          <span class="font-mono text-xs text-[var(--color-fg-dim)]">v0.10.0 · October 2026</span>
+        </div>
+        <h2 class="mt-4 text-2xl md:text-3xl font-bold tracking-tight">
+          Trove KB is now a <span class="text-[var(--color-brand)]">direct integration</span>. The built-in KB stays.
+        </h2>
+        <p class="mt-3 text-[var(--color-fg-muted)] leading-relaxed max-w-3xl">
+          From <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">v0.10.0</code>, Resolvd can read a Trove KB instance over its REST API with one key. Switch it on and both knowledge bases run side by side: local articles and Trove KB collections under <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">/kb</code>, the local panel and the Trove KB block on every ticket. Or run Replace local KB and Trove KB takes over. Nothing is forced; it is the admin's call. The integration is built for Resolvd but runs over Trove KB's public REST API, OpenAPI spec, and signed webhooks, nothing private.
+        </p>
+        <div class="mt-6 grid md:grid-cols-3 gap-4">
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+            <span class="text-xs uppercase tracking-wider text-[var(--color-brand)] font-semibold">What's new</span>
+            <ul class="mt-2 space-y-1.5 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              <li><code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">/kb</code> gains Trove KB collections, categories, favorites, and a Markdown reader beside your local articles.</li>
+              <li>Tickets get a Trove KB block: links, suggestions, resolution drafts, knowledge briefs, Promote-to-KB.</li>
+              <li>Runbooks from Trove KB track step progress per ticket, same as local ones.</li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+            <span class="text-xs uppercase tracking-wider text-[var(--color-brand)] font-semibold">What you need</span>
+            <ul class="mt-2 space-y-1.5 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              <li>A Trove KB instance, <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">v0.1.0</code> or later. Free, open source (AGPL). Docker Compose + Postgres, or a Cloudflare Worker.</li>
+              <li>One API key with <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">read</code> scope and read grants on the collections Resolvd should see.</li>
+              <li>Both apps on the same identity provider. Email is the join key.</li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+            <span class="text-xs uppercase tracking-wider text-[var(--color-brand)] font-semibold">Side by side, or replace</span>
+            <ul class="mt-2 space-y-1.5 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              <li>Nothing changes on upgrade. The local KB keeps working with Trove KB off, on, or beside it.</li>
+              <li><strong class="text-[var(--color-fg-strong)]">Replace local KB</strong> is optional: it shows a plan, moves links and runbook progress, archives local articles, and hides the local KB.</li>
+              <li>Local tables are kept one release for rollback.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="mt-6 flex flex-col sm:flex-row flex-wrap gap-3">
+          <a href={TROVE} target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-sm font-semibold text-[#062814] hover:bg-[var(--color-brand-bright)] transition">
+            Get Trove KB
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+          </a>
+          <a href="/integrations/#trove-kb" class="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+            Full integration feature list
+          </a>
+          <a href="/docs/v0.10.0/kb/" class="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+            Setup + migration docs
+          </a>
+          <a href="/changelog/#v0.10.0" class="inline-flex items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg-strong)] hover:bg-[var(--color-surface-2)] transition">
+            v0.10.0 release notes
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Built in</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">A basic KB, <span class="text-[var(--color-brand)]">per project, out of the box.</span></h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          No extra install. Every project owns its own articles and runbooks, authored in BlockNote and rendered in the Resolvd theme. Enough for a team's fixes and checklists; Trove KB is there when the docs outgrow it.
+        </p>
+      </div>
+      <div class="mt-10 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {builtIn.map(b => (
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+            <h3 class="font-semibold text-[var(--color-fg-strong)] mb-2">{b.title}</h3>
+            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={b.body.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>')}></p>
+          </div>
+        ))}
+      </div>
+    </div>
   </section>
 
   <section class="border-t border-[var(--color-border)]">
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="grid md:grid-cols-2 gap-12 items-start">
         <div>
-          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Authoring</span>
-          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Block editor. <span class="text-[var(--color-brand)]">No markdown gymnastics.</span></h2>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Why Trove KB</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">IT documentation <span class="text-[var(--color-brand)]">that stays yours.</span></h2>
           <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            BlockNote handles the heavy lifting — rich text, headings, lists, code, callouts. Slash-command to insert a block, drag a handle to reorder. Persists as JSON in <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">kb_articles.content_json</code> with a plain-text mirror for full-text search.
+            Trove KB is a structured documentation platform for internal IT teams and MSPs — companies, locations, and devices as typed documents, a knowledge base that imports or crawls vendor docs, rack elevations, domain checks, review schedules. Free and open source under the AGPL. No seat cap, no tiers.
           </p>
           <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            Bundle adds ~380 KB gzipped — code-split <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">pages/Kb*</code> if CDN bandwidth matters.
+            It stores no passwords, TOTP seeds, or secure notes. Secret fields reference Bitwarden, Vaultwarden, 1Password, or HashiCorp Vault; reveals are fetched live and audited. Resolvd never sees a secret through the integration — and neither does an AI assistant over Trove KB's MCP.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Self-host with Docker Compose and Postgres, or run it serverless as a Cloudflare Worker. Same code either way.
+          </p>
+        </div>
+        <div class="grid gap-4">
+          {ownership.map(o => (
+            <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <span class="text-xs uppercase tracking-wider text-[var(--color-brand)] font-semibold">{o.who}</span>
+              <ul class="mt-3 space-y-2 text-sm text-[var(--color-fg-muted)]">
+                {o.items.map(i => (
+                  <li class="flex gap-2"><span class="text-[var(--color-brand)]">✓</span><span>{i}</span></li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Browsing</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Read it <span class="text-[var(--color-brand)]">without leaving Resolvd.</span></h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Search alone isn't enough when the docs live somewhere else. <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">/kb</code> is a full reader: collections, categories, type filters, a Markdown article view that matches the Resolvd theme. Users don't need a Trove KB account to read internal docs inside Resolvd — staff who author docs sign in to Trove KB with the same SSO.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Public articles carry a link to the public Trove KB site. Internal ones render inline at <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">/kb/article/:id</code>.
           </p>
         </div>
         <div>
-          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Block primitives</span>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Surfaces</span>
           <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
-            {editorBlocks.map(b => (
+            {browse.map(b => (
               <div class="px-5 py-3 flex flex-col md:flex-row md:items-start gap-1 md:gap-3">
-                <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[10ch]">{b.name}</span>
+                <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[12ch]">{b.name}</span>
                 <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1">{b.body}</p>
               </div>
             ))}
@@ -84,62 +246,13 @@ const agentOnlyRules = [
   <section class="border-t border-[var(--color-border)]">
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="max-w-2xl">
-        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Version history</span>
-        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Every save. <span class="text-[var(--color-brand)]">Restorable.</span></h2>
-        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          Every save snapshots into <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">kb_article_versions</code> with an optional change_summary. Restore any past version with one click — the restore itself writes a new version row marked <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">Restored from vN</code> so the audit chain never breaks.
-        </p>
-      </div>
-      <div class="mt-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
-        {lifecycle.map(l => (
-          <div class="px-5 py-4 flex flex-col md:flex-row md:items-start gap-1.5 md:gap-4">
-            <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[20ch]">{l.evt}</span>
-            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={l.action.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>')}></p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <section class="border-t border-[var(--color-border)]">
-    <div class="mx-auto max-w-5xl px-6 py-20">
-      <div class="grid md:grid-cols-2 gap-12 items-start">
-        <div>
-          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Tags + keywords</span>
-          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Two surfaces. <span class="text-[var(--color-brand)]">One signal.</span></h2>
-          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            Tags drive the project article index — chip filters that AND together via <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">tags @&gt; $1::text[]</code>. Keywords boost the trigram similarity ranker that matches articles to tickets. Use them for SKU codes, model numbers, error strings — searchable signal that would clutter a tag chip.
-          </p>
-        </div>
-        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          <div class="rounded-lg bg-[#050810] p-5 font-mono text-xs leading-relaxed">
-            <div class="text-[var(--color-fg-dim)]"># Article frontmatter</div>
-            <div class="mt-3 text-[#cbd5e1]">
-              <span class="text-violet-300">title:</span>    <span class="text-emerald-300">"Reseat the RAM on a HP Z240"</span><br />
-              <span class="text-violet-300">tags:</span>     <span class="text-emerald-300">[hardware, hp, workstation]</span><br />
-              <span class="text-violet-300">keywords:</span> <span class="text-emerald-300">[Z240, "DDR4", "blue screen", "0x7E"]</span><br />
-            </div>
-            <div class="mt-5 text-[var(--color-fg-muted)]">
-              <span class="text-[var(--color-brand)]">▸</span> Index filter: tag chips<br />
-              <span class="text-[var(--color-brand)]">▸</span> Ranker boost: keyword tokens<br />
-              <span class="text-[var(--color-brand)]">▸</span> Search hit: either path
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="border-t border-[var(--color-border)]">
-    <div class="mx-auto max-w-5xl px-6 py-20">
-      <div class="max-w-2xl">
         <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Ticket ↔ KB</span>
         <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Articles meet <span class="text-[var(--color-brand)]">tickets where they live</span>.</h2>
         <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          The Resolution tab on every ticket carries a Knowledge panel. Articles surface on open, link explicitly, or get drafted fresh from the ticket itself.
+          Every ticket's Knowledge panel carries a Trove KB block. Articles surface on open, link explicitly, or feed a draft — and every AI-assisted run is stored with its inputs and output for audit.
         </p>
       </div>
-      <div class="mt-10 grid md:grid-cols-3 gap-4">
+      <div class="mt-10 grid md:grid-cols-2 gap-4">
         {ticketSurfaces.map(s => (
           <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <h3 class="font-semibold text-[var(--color-fg-strong)] mb-2">{s.title}</h3>
@@ -147,6 +260,68 @@ const agentOnlyRules = [
           </div>
         ))}
       </div>
+      <div class="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <h3 class="font-semibold text-[var(--color-fg-strong)] mb-2">Noise filter for briefs</h3>
+        <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
+          Comments that say nothing about the problem — SLA notices, project moves, merges, out-of-office auto-replies — are kept out of a brief by admin-managed rules, not code. A regex, a literal, or a specific account. Built-ins are seeded as rows you can disable, edit, or delete, and a test box shows which rules a pasted comment would trip. System and muted comments are always excluded.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Runbooks</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">The checklist lives there. <span class="text-[var(--color-brand)]">The progress lives here.</span></h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          A runbook is a Trove KB article with <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">kind: runbook</code>. Trove KB derives a <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">steps[]</code> array from the Markdown on save, each step with a stable id that survives edits. Resolvd's Runbook tab fetches the steps and keeps checkbox state per ticket keyed by that id — hand off mid-incident and the next handler picks up at the unchecked box where you stopped.
+        </p>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          A step's <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">canned</code> field becomes a 📋 pill that prefills the comment composer with the canned response — placeholders like <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">{`{ticket.ref}`}</code> already substituted server-side.
+        </p>
+      </div>
+
+      <div class="mt-10 grid md:grid-cols-5 gap-6 items-start">
+        <div class="md:col-span-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+          <div class="rounded-lg bg-[#050810] p-5 font-mono text-xs leading-relaxed text-[#cbd5e1]">
+            <div class="text-[var(--color-fg-dim)]"># Trove KB → GET /api/v1/kb/articles/:id</div>
+            <div class="mt-3">
+              <span class="text-violet-300">kind:</span>  <span class="text-emerald-300">runbook</span><br />
+              <span class="text-violet-300">steps:</span><br />
+              <span class="ml-4">- <span class="text-violet-300">id:</span> <span class="text-emerald-300">a3f91c02</span>  <span class="text-violet-300">text:</span> <span class="text-emerald-300">"Confirm VPN profile, capture TCP trace"</span></span><br />
+              <span class="ml-4">- <span class="text-violet-300">id:</span> <span class="text-emerald-300">7c0e55b1</span>  <span class="text-violet-300">text:</span> <span class="text-emerald-300">"Schedule GPO revert, pilot on IT OU"</span></span><br />
+              <span class="ml-4">- <span class="text-violet-300">id:</span> <span class="text-emerald-300">d41ab9e8</span>  <span class="text-violet-300">text:</span> <span class="text-emerald-300">"Engage vendor"</span>  <span class="text-violet-300">canned:</span> <span class="text-emerald-300">vendor-escalation</span></span>
+            </div>
+            <div class="mt-5 text-[var(--color-fg-dim)]"># Resolvd → ticket_runbook_runs.step_states</div>
+            <div class="mt-3">
+              <div><span class="text-emerald-300">[✓]</span> a3f91c02 <span class="text-[var(--color-fg-dim)]">— Devon Park · 10/06/2026</span></div>
+              <div class="mt-1.5"><span class="text-emerald-300">[✓]</span> 7c0e55b1 <span class="text-[var(--color-fg-dim)]">— Devon Park · 10/06/2026</span></div>
+              <div class="mt-1.5"><span class="text-[var(--color-fg-dim)]">[ ]</span> d41ab9e8 <span class="inline-flex items-center gap-0.5 px-1.5 rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)]">📋 Vendor escalation</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="md:col-span-2 space-y-4">
+          <div>
+            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Per-ticket state</span>
+            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              One row per (ticket, runbook). Step toggles run a Postgres <code class="text-xs px-1 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">jsonb ||</code> merge so concurrent handlers don't clobber each other. Trove KB never stores progress.
+            </p>
+          </div>
+          <div>
+            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Author in Markdown</span>
+            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              Steps are task-list items. Ids are minted on first save and preserved by text match; override with <code class="text-xs px-1 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">{`{#id}`}</code> when you want them explicit. Nested bullets under a step become its note.
+            </p>
+          </div>
+          <div>
+            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Recurring tickets</span>
+            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
+              A ticket schedule can name a runbook; every fire starts a run on the new ticket automatically.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -154,19 +329,19 @@ const agentOnlyRules = [
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="grid md:grid-cols-2 gap-12 items-start">
         <div>
-          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Agent-only articles</span>
-          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Some docs <span class="text-[var(--color-brand)]">stay backstage</span>.</h2>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Visibility</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Resolvd decides <span class="text-[var(--color-brand)]">who sees what</span>.</h2>
           <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            Flip a single <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">agent_only</code> flag and the article disappears from listings, suggestions, and ticket links for anyone who isn't a project handler. Same gate as the Notes feature — global Admin / Manager / Tech, or a project member with a handler role override / Agent flag on that project.
+            Resolvd never forwards a user's Trove KB session. It uses its own key and enforces its own roles — the same project-handler gate that guards Notes, runbooks, the vendor-share toggle, and the inventory tab. Internal collections are never shown to a Submitter or Viewer.
           </p>
           <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            For the "vault" docs: vendor credentials, bypass procedures, the printer reset codes the keyboard-warriors don't need.
+            Email is the join key. Both apps sit on the same identity provider, so a favorite starred in Resolvd is the same favorite on the public site.
           </p>
         </div>
         <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
-          {agentOnlyRules.map(r => (
+          {visibilityRules.map(r => (
             <div class="px-5 py-3 flex flex-col md:flex-row md:items-start gap-1 md:gap-3">
-              <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[18ch]">{r.who}</span>
+              <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[16ch]">{r.who}</span>
               <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1">{r.rule}</p>
             </div>
           ))}
@@ -178,54 +353,54 @@ const agentOnlyRules = [
   <section class="border-t border-[var(--color-border)]">
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="max-w-2xl">
-        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Runbooks</span>
-        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">A checklist with <span class="text-[var(--color-brand)]">muscle memory baked in</span>.</h2>
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Kept in step</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Webhooks first. <span class="text-[var(--color-brand)]">Polling as the floor.</span></h2>
         <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          A <strong>runbook</strong> is a KB article with <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">kind='runbook'</code>. Same editor, same versioning, same agent-only flag. The difference is rendered on the ticket: a Runbook tab carries the checklist, with persistent state per ticket — not per user. Hand off mid-incident and the next handler picks up at the unchecked box where you stopped.
-        </p>
-        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          Inline tokens <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">@canned:Vendor escalation</code> become clickable 📋 pills that prefill the comment composer with the canned response — placeholders (<code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">{`{ticket.ref}`}</code>, <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">{`{submitter.firstName}`}</code>) already substituted server-side.
+          Nothing about the integration is private to Resolvd — it runs over the same REST routes, OpenAPI spec, and signed webhooks Trove KB offers any other ticketing system.
         </p>
       </div>
+      <div class="mt-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+        {sync.map(l => (
+          <div class="px-5 py-4 flex flex-col md:flex-row md:items-start gap-1.5 md:gap-4">
+            <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[18ch]">{l.evt}</span>
+            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={l.action.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>')}></p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
 
-      <div class="mt-10 grid md:grid-cols-5 gap-6 items-start">
-        <div class="md:col-span-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          <div class="rounded-lg bg-[#050810] p-5 font-mono text-xs leading-relaxed text-[#cbd5e1]">
-            <div class="text-[var(--color-fg-dim)]"># VPN keepalive incident — diagnostic runbook</div>
-            <div class="mt-3">
-              <div><span class="text-emerald-300">[✓]</span> Identify symptom — confirm VPN profile, capture TCP trace<br /><span class="ml-6 text-[var(--color-fg-dim)] text-[10px]">— Devon Park · 5/10/2026</span></div>
-              <div class="mt-1.5"><span class="text-emerald-300">[✓]</span> Pull TCP keepalive trace from monitoring<br /><span class="ml-6 text-[var(--color-fg-dim)] text-[10px]">— Devon Park · 5/10/2026</span></div>
-              <div class="mt-3 text-violet-300">## Mitigate</div>
-              <div class="mt-1.5"><span class="text-[var(--color-fg-dim)]">[ ]</span> Schedule GPO revert (TCP keepalive 30 → 2 min), pilot on IT OU</div>
-              <div class="mt-1.5"><span class="text-[var(--color-fg-dim)]">[ ]</span> If vendor needs to engage Outlook side, send: <span class="inline-flex items-center gap-0.5 px-1.5 rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)]">📋 Vendor escalation</span></div>
-              <div class="mt-3 text-violet-300">## Wrap up</div>
-              <div class="mt-1.5"><span class="text-[var(--color-fg-dim)]">[ ]</span> Once mitigated, post customer-facing summary: <span class="inline-flex items-center gap-0.5 px-1.5 rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)]">📋 Confirm root cause</span></div>
-            </div>
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Setup</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Five steps. <span class="text-[var(--color-brand)]">One key.</span></h2>
+          <div class="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+            {setupSteps.map(s => (
+              <div class="px-5 py-3">
+                <span class="text-sm font-semibold text-[var(--color-fg-strong)]">{s.step}</span>
+                <p class="mt-1 text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={s.body.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>')}></p>
+              </div>
+            ))}
           </div>
         </div>
-        <div class="md:col-span-2 space-y-4">
-          <div>
-            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Per-ticket state</span>
-            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
-              Stored in <code class="text-xs px-1 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">ticket_runbook_runs</code>. Step toggles run a Postgres <code class="text-xs px-1 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">jsonb ||</code> merge so concurrent handlers don't clobber each other.
-            </p>
-          </div>
-          <div>
-            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Author once</span>
-            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
-              BlockNote check-list-item blocks. Use the bracketed form <code class="text-xs px-1 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">@canned:[Title]</code> for mid-line pills; bare form for end-of-step.
-            </p>
-          </div>
-          <div>
-            <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Audit trail</span>
-            <p class="mt-2 text-sm text-[var(--color-fg-muted)] leading-relaxed">
-              Each box records who ticked it + when. Reset wipes a single run; Mark complete stamps <code class="text-xs px-1 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">completed_at</code> so handoffs can see the run was finished, not abandoned.
-            </p>
-          </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Keep both, or replace</span>
+          <h3 class="mt-2 text-2xl font-bold tracking-tight">Replace local KB is optional.</h3>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Admin → Trove KB shows the migration plan before it touches anything: each local article's twin in Trove KB (matched by <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">external_id</code>), ticket links, runbook runs, and step coverage. Apply copies the links, re-keys runbook progress from BlockNote block ids to Trove KB step ids, archives the local articles, and flips the local KB off.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Local rows are kept one release for rollback. An export script turns BlockNote JSON into Markdown + frontmatter in Trove KB's import layout, with step ids baked in so the re-key lines up.
+          </p>
+          <p class="mt-4 text-sm text-[var(--color-fg-dim)] leading-relaxed">
+            Or leave the local KB on. Both run side by side: local articles and Trove KB collections under /kb, the local panel and the Trove KB block on every ticket. A Local KB checkbox in Admin → Trove KB turns it off or back on without migrating anything. Fresh installs can point at Trove KB and go.
+          </p>
         </div>
       </div>
     </div>
   </section>
 
-  <FeatureFooter currentHref="/kb/" heading="Capture the next fix." subhead="Resolve a ticket → click Promote-to-KB → tweak → publish. The next time the same error walks in, the article auto-surfaces." />
+  <FeatureFooter currentHref="/kb/" heading="Capture the next fix." subhead="Resolve a ticket → Promote-to-KB → it lands in the local KB, or in Trove KB as a draft. The next time the same error walks in, the article is already on the ticket." />
 </Layout>
