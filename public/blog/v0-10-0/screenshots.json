@@ -1,0 +1,122 @@
+{
+  "_comment": "v0.10.0 release post shots. Demo on :8091 with Trove KB demo (:3081) wired in. Refine via reshoots.",
+  "baseURL": "http://localhost:8091",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "deviceScaleFactor": 2,
+  "auth": {
+    "url": "/login",
+    "steps": [
+      {
+        "fill": "input[type=email]",
+        "value": "${DEMO_EMAIL}"
+      },
+      {
+        "fill": "input[type=password]",
+        "value": "${DEMO_PASSWORD}"
+      },
+      {
+        "wait": 1100
+      },
+      {
+        "press": "Enter"
+      },
+      {
+        "waitForURL": "**/dashboard"
+      }
+    ]
+  },
+  "shots": [
+    {
+      "name": "kb-collections",
+      "url": "/kb",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "wait": 900
+        }
+      ],
+      "fullPage": false
+    },
+    {
+      "name": "admin-forms-computed",
+      "url": "/admin/forms",
+      "actions": [
+        {
+          "waitFor": "select"
+        },
+        {
+          "wait": 500
+        },
+        {
+          "eval": "(function(){var s=[...document.querySelectorAll('select')].find(function(x){return [...x.options].some(function(o){return /Select project/.test(o.textContent)})});var set=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;set.call(s,'1');s.dispatchEvent(new Event('change',{bubbles:true}));})()"
+        },
+        {
+          "waitFor": "button:has-text('HR')"
+        },
+        {
+          "click": "button:has-text('HR')"
+        },
+        {
+          "waitFor": "button:has-text('New hire onboarding')"
+        },
+        {
+          "click": "button:has-text('New hire onboarding')"
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "fullPage": true
+    },
+    {
+      "name": "admin-schedules",
+      "url": "/admin/ticket-schedules",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "wait": 800
+        }
+      ],
+      "fullPage": false
+    },
+    {
+      "name": "tasks-page",
+      "url": "/tasks",
+      "actions": [
+        {
+          "waitFor": "h1:has-text('Tasks')"
+        },
+        {
+          "wait": 600
+        }
+      ],
+      "fullPage": false
+    },
+    {
+      "name": "dashboard-buckets",
+      "url": "/dashboard",
+      "actions": [
+        {
+          "waitFor": "h1"
+        },
+        {
+          "eval": "localStorage.setItem('resolvd.dashboardFilters.v1', JSON.stringify({days:365,projectIds:[],statuses:[]})); location.reload()"
+        },
+        {
+          "waitFor": "h1"
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "fullPage": false
+    }
+  ]
+}
