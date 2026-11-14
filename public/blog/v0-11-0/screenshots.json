@@ -1,0 +1,256 @@
+{
+  "_comment": "v0.11.0 blog shots, first pass against the demo (:8091). Slugs match image refs in src/content/blog/v0-11-0.md. Login marks every What's new release seen so the pop-up never covers a shot. whats-new-popup opens the pop-up by dispatching the resolvd:whats-new event for release 2 (in the demo DB the reseed put every change file in one release; it was split so release 1 = v0.10.0 and release 2 = the six v0.11.0 files), so it works even though login marks releases seen. masquerade-banner must stay LAST: it switches the session to a Submitter. apply-form uses ACME-0007 (ticket id 23, emailed in without a form); kb-pdf-link uses ACME-0009 (id 25), whose reply links pages 2 and 3 of the Acme Co. restart guide PDF.",
+  "baseURL": "http://localhost:8091",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "deviceScaleFactor": 2,
+  "auth": {
+    "url": "/login",
+    "steps": [
+      {
+        "fill": "input[type=email]",
+        "value": "${DEMO_EMAIL}"
+      },
+      {
+        "fill": "input[type=password]",
+        "value": "${DEMO_PASSWORD}"
+      },
+      {
+        "wait": 1100
+      },
+      {
+        "press": "Enter"
+      },
+      {
+        "waitForURL": "**/dashboard"
+      },
+      {
+        "eval": "fetch('/api/whats-new/unseen').then(r => r.json()).then(d => Promise.all((d.releases || []).map(x => fetch('/api/whats-new/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ release_id: x.id }) }))))"
+      },
+      {
+        "wait": 300
+      }
+    ]
+  },
+  "shots": [
+    {
+      "name": "ticket-timer-dock",
+      "url": "/tickets/4",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "wait": 900
+        }
+      ],
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 560
+      }
+    },
+    {
+      "name": "billing-rate-cards",
+      "url": "/admin/time-tracking",
+      "actions": [
+        {
+          "waitFor": "h3:has-text('Rate cards')"
+        },
+        {
+          "eval": "(() => { const h = [...document.querySelectorAll('h3')].find(h => h.textContent.trim().startsWith('Rate cards')); if (h) { h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -96); } })()"
+        },
+        {
+          "wait": 500
+        }
+      ]
+    },
+    {
+      "name": "contracts",
+      "url": "/admin/companies?company=4&tab=billing",
+      "actions": [
+        {
+          "waitFor": "h1:has-text('Companies')"
+        },
+        {
+          "wait": 1000
+        }
+      ]
+    },
+    {
+      "name": "timesheet-approvals",
+      "url": "/time",
+      "actions": [
+        {
+          "waitFor": "h1:has-text('Time')"
+        },
+        {
+          "click": "button:has-text('Approvals')"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "eval": "(() => { const s = [...document.querySelectorAll('select')].find(el => [...el.options].some(o => o.text.trim() === \"Any status\")); if (!s) return; const o = [...s.options].find(o => o.text.trim() === \"Any status\"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, o.value); s.dispatchEvent(new Event('change', { bubbles: true })); })()"
+        },
+        {
+          "wait": 1200
+        }
+      ]
+    },
+    {
+      "name": "sla-holidays",
+      "url": "/admin/sla",
+      "actions": [
+        {
+          "waitFor": "h2:has-text('Business hours')"
+        },
+        {
+          "eval": "(() => { const b = [...document.querySelectorAll('button')].filter(b => b.textContent.trim().startsWith('Holidays (')); (b[1] || b[0])?.click(); })()"
+        },
+        {
+          "wait": 700
+        },
+        {
+          "eval": "(() => { const h = [...document.querySelectorAll('h2')].find(h => h.textContent.trim().startsWith('Business hours')); if (h) { h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -96); } })()"
+        },
+        {
+          "wait": 500
+        }
+      ],
+      "viewport": {
+        "width": 1720,
+        "height": 1000
+      }
+    },
+    {
+      "name": "oncall-rotation",
+      "url": "/admin/oncall",
+      "actions": [
+        {
+          "waitFor": "h1:has-text('On-call rotations'), h2:has-text('On-call rotations')"
+        },
+        {
+          "wait": 800
+        }
+      ]
+    },
+    {
+      "name": "status-page",
+      "url": "/status/acme",
+      "actions": [
+        {
+          "waitFor": "h1:has-text('Status pages')"
+        },
+        {
+          "wait": 1200
+        }
+      ]
+    },
+    {
+      "name": "maintenance-window",
+      "url": "/maintenance",
+      "actions": [
+        {
+          "waitFor": "h1:has-text('Maintenance')"
+        },
+        {
+          "click": "button:has-text('Scheduled')"
+        },
+        {
+          "wait": 900
+        }
+      ]
+    },
+    {
+      "name": "apply-form",
+      "url": "/tickets/23",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "click": "button:has-text('Apply form')"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "eval": "(() => { const s = [...document.querySelectorAll('select')].find(el => [...el.options].some(o => o.text.trim() === \"Onboarding\")); if (!s) return; const o = [...s.options].find(o => o.text.trim() === \"Onboarding\"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, o.value); s.dispatchEvent(new Event('change', { bubbles: true })); })()"
+        },
+        {
+          "wait": 600
+        },
+        {
+          "eval": "(() => { const s = [...document.querySelectorAll('select')].find(el => [...el.options].some(o => o.text.trim() === \"New hire onboarding\")); if (!s) return; const o = [...s.options].find(o => o.text.trim() === \"New hire onboarding\"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, o.value); s.dispatchEvent(new Event('change', { bubbles: true })); })()"
+        },
+        {
+          "wait": 1000
+        }
+      ]
+    },
+    {
+      "name": "kb-pdf-link",
+      "url": "/tickets/25",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "eval": "document.querySelector(\"a[href*='/pdf#page=2']\")?.scrollIntoView({ block: 'center' })"
+        },
+        {
+          "wait": 600
+        }
+      ]
+    },
+    {
+      "name": "whats-new-popup",
+      "url": "/dashboard",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "eval": "window.dispatchEvent(new CustomEvent(\"resolvd:whats-new\", { detail: { releaseId: 2 } }))"
+        },
+        {
+          "waitFor": "[role=dialog] h3"
+        },
+        {
+          "wait": 900
+        }
+      ]
+    },
+    {
+      "name": "masquerade-banner",
+      "url": "/dashboard",
+      "actions": [
+        {
+          "waitFor": "h1, h2"
+        },
+        {
+          "eval": "fetch('/api/impersonate/3', { method: 'POST' }).then(() => fetch('/api/whats-new/unseen').then(r => r.json()).then(d => Promise.all((d.releases || []).map(x => fetch('/api/whats-new/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ release_id: x.id }) }))))).then(() => { location.href = '/dashboard'; })"
+        },
+        {
+          "waitFor": "text=Viewing as"
+        },
+        {
+          "wait": 1200
+        }
+      ]
+    }
+  ]
+}
