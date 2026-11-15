@@ -3,9 +3,9 @@
 # Resolvd source code on GitHub (governed by FSL-1.1 and GitHub).
 #   search:   build a search index and show links/snippets   -> yes
 #   ai-input: use in AI answers (RAG, grounding, citations)  -> yes
-#   ai-train: train or fine-tune AI models                   -> yes
+#   ai-train: train or fine-tune AI models                   -> no
 User-agent: *
-Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
 
 Sitemap: https://resolvd.dev/sitemap-index.xml
