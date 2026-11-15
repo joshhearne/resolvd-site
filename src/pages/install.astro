@@ -342,7 +342,6 @@ services:
     image: postgres:16-alpine
     container_name: resolvd-postgres
     restart: unless-stopped
-    env_file: .env
     environment:
       - POSTGRES_DB=${s.dbName}
       - POSTGRES_USER=${s.dbUser}
@@ -357,7 +356,9 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    # Published images. RESOLVD_IMAGE_TAG (in .env) picks the build;
+    # the host updater manages it on auto-update installs.
+    image: ghcr.io/joshhearne/resolvd-backend:\${RESOLVD_IMAGE_TAG:-stable}
     container_name: resolvd-backend
     restart: unless-stopped
     env_file: .env
@@ -368,13 +369,18 @@ services:
       - UPLOADS_DIR=/data/uploads
     volumes:
       - uploads-data:/data/uploads
-    networks: [internal]
+    networks:
+      internal:
+        # nginx.conf proxies to this alias
+        aliases:
+          - resolvd-api
+      alert-intake: {}
     depends_on:
       postgres:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/joshhearne/resolvd-frontend:\${RESOLVD_IMAGE_TAG:-stable}
     container_name: resolvd-frontend
     restart: unless-stopped
     networks: [internal]
@@ -387,7 +393,7 @@ services:
       - "127.0.0.1:${s.internalPort}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    networks: [internal]
+    networks: [internal, alert-intake]
     depends_on: [backend, frontend]
 
 volumes:
@@ -396,6 +402,10 @@ volumes:
 
 networks:
   internal:
+    driver: bridge
+  # Shared with monitoring containers (Uptime Kuma). Postgres is not on it.
+  alert-intake:
+    name: resolvd-alert-intake
     driver: bridge
 `;
   }
@@ -491,12 +501,16 @@ cd resolvd
 
 # 3. Bring up the stack
 mkdir -p data/uploads
-docker compose up -d --build
+docker compose up -d     # pulls published images from GHCR
 docker compose logs -f
 ${tlsHint}
 # 5. Visit ${s.frontendUrl}
 #    Login page shows a Create Admin Account form on first boot.
 #    The account you create there becomes Admin. Invite the rest from Admin → Users.
+
+# Optional: self-updates. Install the host updater once, then pick a
+#    channel (Production / Development / Manual) in Admin → System health → Updates.
+sudo deploy/install-updater.sh
 `;
   }
 
