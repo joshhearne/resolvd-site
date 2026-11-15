@@ -1,4 +1,11 @@
+# Content signals (https://contentsignals.org): how content on resolvd.dev
+# may be used once crawled. Applies to this site only, not to the
+# Resolvd source code on GitHub (governed by FSL-1.1 and GitHub).
+#   search:   build a search index and show links/snippets   -> yes
+#   ai-input: use in AI answers (RAG, grounding, citations)  -> yes
+#   ai-train: train or fine-tune AI models                   -> yes
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
 Allow: /
 
 Sitemap: https://resolvd.dev/sitemap-index.xml

@@ -1,0 +1,110 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getCollection } from "astro:content";
+import { featureNav } from "../lib/featureNav";
+import { getLatestVersion, listTopics, topicSlug } from "../lib/docs";
+
+// Human-readable sitemap. Built from the same sources as llms.txt so it
+// tracks new features, docs topics and release posts without hand edits.
+// The machine-readable version is /sitemap-index.xml (@astrojs/sitemap).
+const version = await getLatestVersion();
+const topics = await listTopics(version);
+const posts = (await getCollection("blog"))
+  .filter(p => !p.data.draft)
+  .sort((a, b) => b.data.publishDate.getTime() - a.data.publishDate.getTime());
+
+const sections = [
+  {
+    title: "Overview",
+    links: [
+      { href: "/", label: "Home" },
+      { href: "/changelog/", label: "Changelog" },
+      { href: "https://github.com/joshhearne/resolvd", label: "Source on GitHub", external: true },
+    ],
+  },
+  {
+    title: "Features",
+    links: featureNav.map(f => ({ href: f.href, label: f.label, note: f.note })),
+  },
+  {
+    title: "Get started",
+    links: [
+      { href: "/install/", label: "Install wizard", note: "Generates .env, docker-compose.yml and a reverse-proxy snippet" },
+      { href: "/manual/", label: "Manual setup", note: "Step-by-step setup without the wizard" },
+    ],
+  },
+  {
+    title: `Docs (${version})`,
+    links: topics.map(t => ({
+      href: `/docs/${version}/${topicSlug(t)}/`,
+      label: t.data.title,
+      note: t.data.summary,
+    })),
+  },
+  {
+    title: "Blog",
+    links: [
+      { href: "/blog/", label: "All posts" },
+      ...posts.map(p => ({ href: `/blog/${p.id}/`, label: p.data.title })),
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { href: "/license/", label: "License (FSL-1.1)" },
+      { href: "/privacy/", label: "Privacy policy" },
+      { href: "/terms/", label: "Terms of use" },
+    ],
+  },
+];
+---
+
+<Layout title="Sitemap — Resolvd" description="Every page on resolvd.dev: features, install guides, docs, release posts and legal pages.">
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-3xl px-6 pt-20 pb-10 md:pt-28">
+      <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
+        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)] shadow-[0_0_8px_var(--color-brand)]"></span>
+        Index
+      </span>
+      <h1 class="mt-2 text-4xl md:text-5xl font-bold tracking-tight leading-[1.05]">
+        Site<span class="text-[var(--color-brand)]">map</span>.
+      </h1>
+      <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed">
+        Every page on resolvd.dev in one place.
+      </p>
+      <p class="mt-4 text-xs text-[var(--color-fg-dim)]">
+        Looking for the XML version? It's at <a href="/sitemap-index.xml" class="text-[var(--color-brand)] hover:underline">/sitemap-index.xml</a>.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sitemap mx-auto max-w-3xl px-6 pb-16">
+      {sections.map(s => (
+        <div>
+          <h2>{s.title}</h2>
+          <ul>
+            {s.links.map(l => (
+              <li>
+                <a href={l.href} {...(l.external ? { target: "_blank", rel: "noopener" } : {})}>
+                  {l.label}{l.external && <span class="text-[var(--color-fg-dim)]"> ↗</span>}
+                </a>
+                {l.note && <span class="note"> — {l.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </section>
+</Layout>
+
+<style is:global>
+  .sitemap { font-size: 0.95rem; line-height: 1.6; color: var(--color-fg-muted); }
+  .sitemap h2 { margin-top: 2.5rem; margin-bottom: 0.75rem; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; color: var(--color-fg-strong); }
+  .sitemap ul { padding-left: 1.25rem; list-style: disc; display: flex; flex-direction: column; gap: 0.5rem; }
+  .sitemap li::marker { color: var(--color-brand); }
+  .sitemap a { color: var(--color-fg-strong); font-weight: 500; }
+  .sitemap a:hover { color: var(--color-brand); }
+  .sitemap .note { color: var(--color-fg-dim); }
+</style>
