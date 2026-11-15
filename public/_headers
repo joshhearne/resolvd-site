@@ -1,0 +1,8 @@
+# Cloudflare Pages headers
+
+# Agent discovery (RFC 8288): point agents at the site guide from the homepage.
+/
+  Link: </llms.txt>; rel="service-doc"; type="text/markdown", </llms.txt>; rel="describedby"; type="text/markdown", </license/>; rel="license", </sitemap-index.xml>; rel="sitemap"; type="application/xml", </privacy/>; rel="privacy-policy", </terms/>; rel="terms-of-service"
+
+/llms.txt
+  Content-Type: text/markdown; charset=utf-8

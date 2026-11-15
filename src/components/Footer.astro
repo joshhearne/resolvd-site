@@ -10,6 +10,8 @@ const groups = [
       { href: "/kb/",        label: "Knowledge Base" },
       { href: "/alerts/",    label: "Alerts" },
       { href: "/sla/",       label: "SLA Tracker" },
+      { href: "/time-billing/", label: "Time + Billing" },
+      { href: "/status-pages/", label: "Status Pages" },
       { href: "/ai/",        label: "AI Assist" },
       { href: "/email/",     label: "Email-to-Ticket" },
       { href: "/vendors/",   label: "Vendor CRM" },
@@ -55,20 +57,26 @@ const groups = [
         )}
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-8">
-        {groups.map(g => (
-          <div class="flex flex-col gap-3">
-            <div class="text-[10px] uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">{g.label}</div>
-            <ul class="flex flex-col gap-2">
-              {g.links.map(l => (
-                <li>
-                  <a
-                    href={l.href}
-                    {...(l.external ? { target: "_blank", rel: "noopener" } : {})}
-                    class="hover:text-[var(--color-fg-strong)] transition"
-                  >{l.label}{l.external && <span class="text-[var(--color-fg-dim)]"> ↗</span>}</a>
-                </li>
-              ))}
-            </ul>
+        {[groups.slice(0, 1), groups.slice(1)].map(col => (
+          // Mobile: two columns, Get started + Learn stacked on the right.
+          // sm+: wrapper dissolves (contents) so each group is its own column.
+          <div class="flex flex-col gap-8 sm:contents">
+            {col.map(g => (
+              <div class="flex flex-col gap-3">
+                <div class="text-[10px] uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">{g.label}</div>
+                <ul class="flex flex-col gap-2">
+                  {g.links.map(l => (
+                    <li>
+                      <a
+                        href={l.href}
+                        {...(l.external ? { target: "_blank", rel: "noopener" } : {})}
+                        class="hover:text-[var(--color-fg-strong)] transition"
+                      >{l.label}{l.external && <span class="text-[var(--color-fg-dim)]"> ↗</span>}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -77,6 +85,8 @@ const groups = [
       <span class="text-[var(--color-fg-dim)]">Resolvd — self-hosted issue tracking</span>
       <div class="flex items-center gap-4">
         <a href="/license/" class="text-[var(--color-fg-dim)] hover:text-[var(--color-fg-strong)] transition">FSL-1.1</a>
+        <a href="/privacy/" class="text-[var(--color-fg-dim)] hover:text-[var(--color-fg-strong)] transition">Privacy</a>
+        <a href="/terms/" class="text-[var(--color-fg-dim)] hover:text-[var(--color-fg-strong)] transition">Terms</a>
         <a href="https://hearnetech.com" target="_blank" rel="noopener" class="flex items-center gap-2 text-[var(--color-fg-dim)] hover:text-[var(--color-fg-strong)] transition">
           <span>Powered by</span>
           <img src="/hearne-logo.png" alt="Hearne Technologies" class="hearne-logo-light h-5 w-auto" />

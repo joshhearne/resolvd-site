@@ -1,0 +1,97 @@
+---
+import Layout from "../layouts/Layout.astro";
+const updated = "November 15, 2026";
+---
+
+<Layout title="Privacy Policy — Resolvd" description="What resolvd.dev collects (almost nothing), what the self-hosted Resolvd software sends us (nothing), and how to reach us about your information.">
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-3xl px-6 pt-20 pb-10 md:pt-28">
+      <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
+        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)] shadow-[0_0_8px_var(--color-brand)]"></span>
+        Legal
+      </span>
+      <h1 class="mt-2 text-4xl md:text-5xl font-bold tracking-tight leading-[1.05]">
+        Privacy <span class="text-[var(--color-brand)]">policy</span>.
+      </h1>
+      <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed">
+        Short version: this site has no forms, no accounts and no trackers, and the Resolvd software you install never reports back to us.
+      </p>
+      <p class="mt-4 text-xs text-[var(--color-fg-dim)]">Last updated: {updated}</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="legal mx-auto max-w-3xl px-6 pb-16">
+      <p>
+        Resolvd is published by Hearne Technologies ("we," "us"), based in Lufkin, Texas. This policy covers this website, resolvd.dev. It also explains what the self-hosted Resolvd software does and doesn't send us.
+      </p>
+
+      <h2>This website</h2>
+      <p>
+        <strong>Nothing you type in.</strong> resolvd.dev has no contact form, sign-up, newsletter or account system, so we don't collect your name or email through it.
+      </p>
+      <p>
+        <strong>Standard request logs.</strong> The site is hosted on Cloudflare Pages. Like any host, Cloudflare processes technical data such as your IP address, browser type and the pages you request, to deliver the site and protect it from abuse. We don't run advertising trackers or third-party analytics scripts on this site.
+      </p>
+      <p>
+        <strong>On-device settings.</strong> Your light / dark theme choice is saved in your browser's local storage. It stays on your device and is never sent to us. This site sets no cookies of its own.
+      </p>
+
+      <h2>Third-party content</h2>
+      <p>A few resources load from other providers, so your browser contacts them directly:</p>
+      <ul>
+        <li><strong>Google Fonts:</strong> our typefaces load from Google's servers, which receive your IP address as part of that request.</li>
+        <li><strong>GitHub:</strong> links to the source code, releases and issues take you to GitHub, which has its own privacy policy.</li>
+      </ul>
+
+      <h2>The Resolvd software</h2>
+      <p>
+        Resolvd is self-hosted. When you install it, your tickets, users, files and settings live on your server, in your database. We have no access to them.
+      </p>
+      <ul>
+        <li><strong>No telemetry.</strong> Resolvd doesn't send usage data, analytics or crash reports to us.</li>
+        <li><strong>Updates.</strong> Installing or updating Resolvd downloads code and container images from GitHub and the GitHub Container Registry. If you enable the optional host updater, it does this on the schedule you choose. GitHub sees those requests; we don't.</li>
+        <li><strong>Integrations you turn on.</strong> Connecting an email provider, AI provider, RMM, monitoring tool, Trove KB or webhook sends data from your server to that service, under your account with them. Those connections are configured by you and never pass through us.</li>
+      </ul>
+      <p>
+        If you run Resolvd for your organization, you are responsible for the personal information it holds, including telling your users how it's handled.
+      </p>
+
+      <h2>How we use information</h2>
+      <p>
+        The limited technical data described above is used to serve this site, keep it secure and running, and understand whether it's working. We don't sell personal information and don't share it for anyone's advertising. We may disclose information if required by law.
+      </p>
+
+      <h2>Your rights</h2>
+      <p>
+        Depending on where you live, you may have rights to access, correct or delete personal information, under laws such as the Texas Data Privacy and Security Act, the California Consumer Privacy Act (CCPA) or the EU / UK GDPR. Because this site collects so little, we usually hold nothing that identifies you. If you think we do, email us and we'll respond promptly, free of charge.
+      </p>
+
+      <h2>Children's privacy</h2>
+      <p>
+        This site is intended for businesses and adults. We don't knowingly collect personal information from children.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        We may update this policy as the site, the software or the law changes. When we do, we'll revise the "Last updated" date above.
+      </p>
+
+      <h2>Contact us</h2>
+      <p>
+        Questions about this policy? Email <a href="mailto:support@hearnetech.com">support@hearnetech.com</a>. Hearne Technologies, Lufkin, Texas.
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<style is:global>
+  .legal { font-size: 0.95rem; line-height: 1.75; color: var(--color-fg-muted); }
+  .legal h2 { margin-top: 2.5rem; margin-bottom: 0.75rem; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; color: var(--color-fg-strong); }
+  .legal p { margin-top: 0.9rem; }
+  .legal ul { margin-top: 0.9rem; padding-left: 1.25rem; list-style: disc; display: flex; flex-direction: column; gap: 0.5rem; }
+  .legal li::marker { color: var(--color-brand); }
+  .legal strong { color: var(--color-fg-strong); font-weight: 600; }
+  .legal a { color: var(--color-brand); }
+  .legal a:hover { text-decoration: underline; }
+</style>
