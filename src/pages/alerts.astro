@@ -28,6 +28,11 @@ const adapters = [
     asterisk: true,
   },
   {
+    name: "Uptime Kuma",
+    body: "Kuma's default webhook JSON opens and resolves alerts per monitor. Add an API key and Resolvd reads Kuma's `/metrics` every 55 seconds for live state, uptime, response time and cert days, which feed [status pages](/status-pages/).",
+    chip: "Webhook + metrics",
+  },
+  {
     name: "Generic webhook",
     body: "Tabular field-map editor — map inbound JSON paths to Resolvd ticket fields with optional `value_map` lookups. Onboard anything without a code change.",
     chip: "Field-map",
@@ -35,7 +40,7 @@ const adapters = [
 ];
 ---
 
-<Layout title="Alerts + Rules — Resolvd" description="Top-level deduped Alerts page with rule-driven ticket promotion, state machine across open / acknowledged / cleared, and a multi-vendor registry covering Zabbix, Action1, and generic webhook intake.">
+<Layout title="Alerts + Rules — Resolvd" description="Top-level deduped Alerts page with rule-driven ticket promotion, state machine across open / acknowledged / cleared, and a multi-vendor registry covering Zabbix, Action1, Uptime Kuma, and generic webhook intake, with maintenance windows that hold back promotion.">
   <section class="relative overflow-hidden">
     <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
       <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
@@ -138,21 +143,27 @@ const adapters = [
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="max-w-2xl">
         <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Integration registry</span>
-        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Three adapters. <span class="text-[var(--color-brand)]">Registry-driven.</span></h2>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Four adapters. <span class="text-[var(--color-brand)]">Registry-driven.</span></h2>
         <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
           <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">services/integrations/registry.js</code> is the source of truth for vendor adapters. The admin add-source form renders each adapter's <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">credentialsSchema</code> — so onboarding NinjaOne / Datto / ConnectWise lands the day the registry entry does, without UI churn.
         </p>
       </div>
-      <div class="mt-10 grid md:grid-cols-3 gap-4">
+      <div class="mt-10 grid md:grid-cols-2 gap-4">
         {adapters.map(a => (
           <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <div class="flex items-baseline justify-between gap-3 mb-2">
               <h3 class="font-semibold text-[var(--color-fg-strong)]">{a.name}{a.asterisk && <sup class="text-[var(--color-brand)]">*</sup>}</h3>
               <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)] border border-[var(--color-brand)]/30">{a.chip}</span>
             </div>
-            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={a.body.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>')}></p>
+            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={a.body.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-[var(--color-brand)] hover:underline">$1</a>')}></p>
           </div>
         ))}
+      </div>
+      <div class="mt-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <h3 class="font-semibold text-[var(--color-fg-strong)] mb-2">Maintenance windows hold alerts back</h3>
+        <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
+          While a <a href="/status-pages/" class="text-[var(--color-brand)] hover:underline">maintenance window</a> covers an item, directly or through its service, its alerts are still recorded but don't open tickets. Promotion is checked again when the window ends, or when it's shortened or deleted.
+        </p>
       </div>
     </div>
   </section>

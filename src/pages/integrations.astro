@@ -109,6 +109,27 @@ const connectors = [
     href: "/alerts/",
   },
   {
+    name: "Uptime Kuma",
+    kind: "Monitoring adapter",
+    body: "Kuma's default webhook opens and resolves alerts per monitor. With an API key, Resolvd polls Kuma's `/metrics` every 55 seconds for live state, uptime, response time and cert days. Groups become services on status pages. Joins Resolvd on the `resolvd-alert-intake` network, away from Postgres.",
+    where: "Admin → Integrations",
+    href: "/status-pages/",
+  },
+  {
+    name: "Slack · Teams · PagerDuty",
+    kind: "SLA breach webhooks",
+    body: "Breach and at-risk notices filtered by project and priority. Slack gets Block Kit, Teams an Adaptive Card, PagerDuty an Events API v2 incident that resolves with the ticket, and anything else HMAC-signed JSON. Delivery log and Send test per hook.",
+    where: "Admin → SLA policies → Breach notifications",
+    href: "/sla/",
+  },
+  {
+    name: "Calendar feeds (.ics)",
+    kind: "Calendar",
+    body: "Per-user subscribable feeds for maintenance windows, recurring-ticket runs and each SLA policy's holidays, for Outlook / Microsoft 365 or Google Calendar. The token in the URL is the credential; regenerate it to revoke old links.",
+    where: "Account settings → Calendar",
+    href: "/status-pages/",
+  },
+  {
     name: "Generic webhook",
     kind: "Alert adapter",
     body: "Any alert source that can POST JSON. A tabular field-map editor turns its payload into severity, host, title, and clear events, then the same rules engine decides promote / notify-only / ignore.",
@@ -173,7 +194,7 @@ const connectors = [
 ];
 ---
 
-<Layout title="Integrations — Resolvd" description="Everything Resolvd connects to: Trove KB as a direct, purpose-built knowledge base integration with the full feature list, plus Action1, Zabbix, generic webhooks, Microsoft 365 Graph, Gmail, SMTP, Entra ID, Google OAuth, OpenAI, Anthropic, Ollama, ZPL label printers, and Web Push.">
+<Layout title="Integrations — Resolvd" description="Everything Resolvd connects to: Trove KB as a direct, purpose-built knowledge base integration with the full feature list, plus Action1, Zabbix, Uptime Kuma, generic webhooks, Slack / Teams / PagerDuty breach webhooks, calendar feeds, Microsoft 365 Graph, Gmail, SMTP, Entra ID, Google OAuth, OpenAI, Anthropic, Ollama, ZPL label printers, and Web Push.">
   <section class="relative overflow-hidden">
     <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
       <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">

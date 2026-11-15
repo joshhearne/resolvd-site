@@ -14,6 +14,11 @@ const features = [
     body: "Scoped projects with custom prefixes (WEB-0042). P1–P5 priorities, semantic status chain with one-click Advance, auto-close grace, move between projects, inline title edit.",
   },
   {
+    icon: "📝",
+    title: "Request Forms",
+    body: "Per-project categories and forms with required, agent-only, sensitive and computed fields. Deep-linkable new-ticket URLs. Apply a form to an email-created ticket after the fact, or add any single field ad hoc.",
+  },
+  {
     icon: "🖥️",
     title: "Inventory + Action1",
     body: "Top-level Inventory across every managed machine. Action1 connector pulls endpoints, installed software, security posture (patches, vulns, reboot required). Twelve seeded asset types + admin-defined customs + per-source custom-field mapping.",
@@ -28,14 +33,26 @@ const features = [
   {
     icon: "🚨",
     title: "Alerts + Rules",
-    body: "Deduped state-machined view of every problem from Zabbix, Action1, or a generic webhook. Per-source rules pick which severities auto-promote to tickets (promote / notify-only / ignore). Dashboard widget lists top open.",
+    body: "Deduped state-machined view of every problem from Zabbix, Action1, Uptime Kuma, or a generic webhook. Per-source rules pick which severities auto-promote to tickets (promote / notify-only / ignore). Dashboard widget lists top open.",
     href: "/alerts/",
   },
   {
     icon: "⏱️",
     title: "SLA Tracker",
-    body: "Response + resolve clocks per priority. Pre-breach warnings at 80%, business-hours clocks, escalation chains, auto-assignment (round-robin / case-load / specific). Vendor-vs-internal wait split on the dashboard.",
+    body: "Response + resolve clocks per priority. Pre-breach warnings at 80%, business hours with holiday rules and per-location windows, escalation chains that page whoever is on call, breach webhooks to Slack / Teams / PagerDuty, auto-assignment.",
     href: "/sla/",
+  },
+  {
+    icon: "🧾",
+    title: "Time Tracking + MSP Billing",
+    body: "A timer on every ticket that pauses itself on hold. Private-by-default work notes, admin rounding and minimums, weekly timesheets. MSP mode adds rate cards, contracts, prepaid blocks, approvals and a priced export, all in integer cents.",
+    href: "/time-billing/",
+  },
+  {
+    icon: "📶",
+    title: "Status Pages",
+    body: "Uptime Kuma groups become services with live state, 14-day history bars and an outage list. Curated pages for signed-in users, email subscriptions, and maintenance windows that hold alerts back from tickets.",
+    href: "/status-pages/",
   },
   {
     icon: "✨",
@@ -68,7 +85,13 @@ const features = [
   {
     icon: "🔐",
     title: "Flexible Auth + Hardening",
-    body: "Microsoft Entra, Google OAuth, or local with Argon2id. TOTP MFA per role. Login hardened with per-IP rate limit, persistent block on credential stuffing, honeypot + sub-800ms dwell rejection, session regeneration, CSP + HSTS.",
+    body: "Microsoft Entra, Google OAuth, or local with Argon2id. TOTP MFA per role. Submitters see only their own tickets; admins can View as any non-admin user, audit-logged. Login hardened with per-IP rate limit, persistent block on credential stuffing, honeypot + sub-800ms dwell rejection, session regeneration, CSP + HSTS.",
+  },
+  {
+    icon: "🔄",
+    title: "Self-Updating Installs",
+    body: "Docker installs run published images from GHCR. A host updater backs up the database, moves to the new build on your schedule, and rolls back if the health check fails. Everyone gets a What's new pop-up after.",
+    href: "/install/",
   },
   {
     icon: "🔒",
@@ -108,7 +131,7 @@ const features = [
 <span class="k">git</span> clone https://github.com/joshhearne/resolvd.git
 <span class="k">cd</span> resolvd
 <span class="k">cp</span> .env.example .env  <span class="c"># edit secrets</span>
-<span class="k">docker</span> compose up -d --build</pre>
+<span class="k">docker</span> compose up -d</pre>
         </div>
       </div>
     </div>

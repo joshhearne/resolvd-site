@@ -21,10 +21,25 @@ const lifecycle = [
 ];
 
 const dashboardTiles = [
-  { label: "MTD response breaches", note: "Tickets whose response clock blew this month." },
-  { label: "MTD resolve breaches", note: "Tickets whose resolve clock blew this month." },
-  { label: "Currently breached", note: "Open tickets still over. Clickable → filtered ticket list." },
-  { label: "Open with SLA clock", note: "Active clocks, useful as a denominator." },
+  { label: "Breached now", note: "Named tickets and who has them, most overdue first." },
+  { label: "Due soon", note: "At-risk clocks before they blow." },
+  { label: "Paused right now", note: "Vendor vs internal, longest first. Only tickets paused right now." },
+  { label: "Late this month", note: "Each breached clock and how late it landed." },
+];
+
+const webhookKinds = [
+  { name: "slack",     dest: "Incoming-webhook URL", msg: "Block Kit message." },
+  { name: "teams",     dest: "Teams Workflows URL",  msg: "Adaptive Card." },
+  { name: "pagerduty", dest: "Events API v2 routing key", msg: "One incident per ticket + clock. Resolves itself when the ticket does. Severity mapped from priority." },
+  { name: "generic",   dest: "Any URL", msg: "JSON, HMAC-SHA256 signed in `X-Resolvd-Signature` when a secret is set." },
+];
+
+const holidayRules = [
+  { rule: "On a date", ex: "`2026-06-08`, or every year: *Every December 25*." },
+  { rule: "Weekday rule", ex: "*4th Thursday of November*, *last Monday of May*." },
+  { rule: "Observed", ex: "Saturday holiday taken Friday, Sunday holiday taken Monday." },
+  { rule: "Multi-day", ex: "Thanksgiving Thursday + Friday as one rule, up to 14 days." },
+  { rule: "Early close", ex: "Christmas Eve open until noon, closed after." },
 ];
 
 const escalationTriggers = [
@@ -41,13 +56,13 @@ const assignmentStrategies = [
 ];
 
 const roadmap = [
-  { tag: "Next", title: "Custom breach destinations", body: "Webhook out on breach for Slack / Teams / PagerDuty. Today only the built-in fanout + escalation chain fires." },
-  { tag: "Next", title: "Holiday calendars", body: "Business-hours policies skip weekends today. Per-region holiday lists layer on top so federal / regional holidays don't burn SLA clock." },
-  { tag: "Next", title: "Per-customer SLA contracts", body: "Override a policy by company (not just project) so MSP customer-tier SLAs map directly to the contract that pays for them." },
+  { tag: "Next", title: "Per-customer SLA contracts", body: "Override a policy by company (not just project) so MSP customer-tier SLAs map directly to the contract that pays for them. Billing contracts shipped in v0.11.0; SLA targets don't key off them yet." },
+  { tag: "Planned", title: "IF/THEN rules engine", body: "Admin-built \"when this matches, do that\" overrides for SLA, assignment and notifications. First use: skip the response clock when the submitter is the assigned agent." },
+  { tag: "Planned", title: "SLA compliance trends", body: "Per-agent and per-project compliance over a rolling 90 days. The SLA card is current-state and month-to-date today." },
 ];
 ---
 
-<Layout title="SLA Tracker — Resolvd" description="Per-priority + per-project SLA targets, pause-on-blocker, breach detection with immediate fanout, month-to-date dashboard card.">
+<Layout title="SLA Tracker — Resolvd" description="Per-priority + per-project SLA targets, pause-on-blocker, business hours with holiday rules and per-location hours, escalation chains with on-call rotations, and breach webhooks to Slack, Teams, PagerDuty or any URL.">
   <section class="relative overflow-hidden">
     <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
       <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
@@ -58,7 +73,7 @@ const roadmap = [
         Two clocks. <span class="text-[var(--color-brand)]">Fair pauses.</span> Loud breaches.
       </h1>
       <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
-        Response + resolve targets per priority, with per-project overrides. Pre-breach warnings at 80%. Clocks pause on blocker statuses and count only business hours. Escalation chains fire step-by-step on breach. Auto-assignment picks an agent at create time so the clock starts on the right person.
+        Response + resolve targets per priority, with per-project overrides. Pre-breach warnings at 80%. Clocks pause on blocker statuses and count only business hours. Holidays and per-location hours stop the clock when you're closed. Escalation chains page whoever is on call, and breach webhooks land in Slack, Teams or PagerDuty. Auto-assignment picks an agent at create time so the clock starts on the right person.
       </p>
       <div class="mt-10 flex flex-wrap gap-2">
         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-400/40 bg-emerald-400/10 text-xs font-semibold text-emerald-300 tracking-wider uppercase">
@@ -147,10 +162,10 @@ const roadmap = [
           </p>
         </div>
         <div>
-          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">MTD dashboard card</span>
-          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Month-to-date <span class="text-[var(--color-brand)]">at a glance</span>.</h2>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Dashboard SLA card</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Tickets, <span class="text-[var(--color-brand)]">not tallies</span>.</h2>
           <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            Dashboard card with four stat tiles plus a per-project breakdown table when breaches exist. Admin / Manager see all projects; Submitter / Viewer see only their member projects. All-clear state collapses to one line.
+            The SLA card names tickets instead of counting them, so you can act from the dashboard. Breached and at-risk lists skip closed and resolved tickets; project totals stay as chips. Submitters don't see the card.
           </p>
           <div class="mt-5 grid grid-cols-2 gap-2">
             {dashboardTiles.map(t => (
@@ -165,6 +180,29 @@ const roadmap = [
     </div>
   </section>
 
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Breach webhooks</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Breaches land <span class="text-[var(--color-brand)]">where your team already is</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          <strong class="text-[var(--color-fg-strong)]">Admin → SLA policies → Breach notifications</strong> posts response and resolve breaches, plus at-risk warnings if you want them, alongside the in-app and email fanout. Filter each hook by project and priority (<em>P1 only</em> up to <em>All</em>). Every hook has a delivery log and a <strong class="text-[var(--color-fg-strong)]">Send test</strong> button.
+        </p>
+      </div>
+      <div class="mt-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+        {webhookKinds.map(w => (
+          <div class="px-5 py-4 flex flex-col md:flex-row md:items-start gap-1.5 md:gap-4">
+            <code class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[11ch]">{w.name}</code>
+            <span class="text-xs text-[var(--color-fg-dim)] md:mt-0.5 md:shrink-0 md:min-w-[22ch]">{w.dest}</span>
+            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={w.msg.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>')}></p>
+          </div>
+        ))}
+      </div>
+      <p class="mt-5 text-xs text-[var(--color-fg-dim)]">URLs, routing keys and signing secrets are stored encrypted and never sent back to the browser.</p>
+    </div>
+  </section>
+
   <section class="border-t border-[var(--color-border)]">
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="grid md:grid-cols-2 gap-12 items-start">
@@ -175,7 +213,9 @@ const roadmap = [
             <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">business_hours_policies</code> carries a timezone, day mask, and start/end times — per-project or org default. Plugs into the SLA clock via <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">addBusinessMinutes()</code>.
           </p>
           <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-            Friday 4pm + 4hr response target now lands Monday 12pm, not Saturday 8pm. Seeded Mon–Fri 9–5 Central; admin can add per-project overrides for customer-specific hours.
+            Friday 4pm + 4hr response target now lands Monday 12pm, not Saturday 8pm. Seeded Mon–Fri 9–5 Central; add per-project overrides for customer-specific hours.</p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            <strong class="text-[var(--color-fg-strong)]">Per-location hours.</strong> A location can have its own window, which replaces the policy's hours for tickets at that site. Tickets pick up the submitter's location on create, and escalation delays follow the same window.
           </p>
         </div>
         <div>
@@ -194,11 +234,40 @@ const roadmap = [
 
   <section class="border-t border-[var(--color-border)]">
     <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Holidays</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Closed means <span class="text-[var(--color-brand)]">the clock stops</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Each business-hours policy carries its own holiday list. The SLA clock and escalation delays skip a holiday like a weekend, and billing prices holiday work at the weekend rate. All three read the same rules.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            No national set is seeded, so you enter your own. Each policy's holidays are also a calendar anyone can subscribe to from <strong class="text-[var(--color-fg-strong)]">Account settings → Calendar</strong>.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Rule types</span>
+          <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+            {holidayRules.map(h => (
+              <div class="px-5 py-3 flex flex-col md:flex-row md:items-start gap-1 md:gap-3">
+                <span class="text-sm font-medium text-[var(--color-fg-strong)] md:shrink-0 md:min-w-[12ch]">{h.rule}</span>
+                <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={h.ex.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>').replace(/\*([^*]+)\*/g, '<em>$1</em>')}></p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <img src="/blog/v0-11-0/sla-holidays.png" alt="Business hours with holiday rules: Thanksgiving spanning two days, Christmas Eve closing at noon" loading="lazy" class="mt-10 w-full rounded-xl border border-[var(--color-border)]" />
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="max-w-2xl">
         <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Escalation chains</span>
         <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Step-by-step <span class="text-[var(--color-brand)]">on four triggers</span>.</h2>
         <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          Per-policy step lists fire on four triggers. Each step has a <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">delay_minutes</code> grace period and an action: notify user / notify role / reassign user / reassign role. Project-scoped steps run additively alongside org defaults — a per-project nudge can coexist with an org-wide "page the on-call" step. Each step fires once per ticket.
+          Per-policy step lists fire on four triggers. Each step has a <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">delay_minutes</code> grace period, walked through business hours when the policy has them, and one or more actions: notify a user, role, the assignee or whoever is on call; reassign to a user, role, the next agent or the on-call person; or bump priority. Project-scoped steps run additively alongside org defaults — a per-project nudge can coexist with an org-wide "page the on-call" step. Each step fires once per ticket.
         </p>
       </div>
       <div class="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -210,6 +279,25 @@ const roadmap = [
         ))}
       </div>
       <p class="mt-5 text-xs text-[var(--color-fg-dim)]">Priority operators (<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">=</code> / <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">&lt;</code> / <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">&lt;=</code> / <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">&gt;</code> / <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">&gt;=</code>) apply on the match — one step can cover P1 + P2 with <code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">&lt;= 2</code> instead of duplicating rows.</p>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">On-call rotations</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Page <span class="text-[var(--color-brand)]">whoever is on</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Members take shifts in turn from a handoff time, so there are no shift rows to maintain. Overrides cover swaps and leave. A project's own rotations beat the org-wide ones.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Two escalation actions use them: <strong class="text-[var(--color-fg-strong)]">Notify on-call</strong> reaches the on-call person of every matching rotation, and <strong class="text-[var(--color-fg-strong)]">Reassign to on-call</strong> hands the ticket to the first. A step with nobody on call waits and retries until someone is.
+          </p>
+          <p class="mt-4 text-xs text-[var(--color-fg-dim)]"><strong class="text-[var(--color-fg-strong)]">Admin → On-call rotations</strong> shows who's on now and the next shifts.</p>
+        </div>
+        <img src="/blog/v0-11-0/oncall-rotation.png" alt="An on-call rotation with who's on now and the next shifts" loading="lazy" class="w-full rounded-xl border border-[var(--color-border)]" />
+      </div>
     </div>
   </section>
 
@@ -269,7 +357,7 @@ const roadmap = [
         <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Roadmap</span>
         <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">What's <span class="text-[var(--color-brand)]">next</span>.</h2>
         <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          v0.6.0 shipped clocks + pauses + breach fanout + dashboard. v0.7.0 added pre-breach warnings, business hours, escalation chains, auto-assignment, and vendor-vs-internal reporting. Queue below.
+          v0.6.0 shipped clocks + pauses + breach fanout + dashboard. v0.7.0 added pre-breach warnings, business hours, escalation chains, auto-assignment, and vendor-vs-internal reporting. v0.11.0 added on-call rotations, breach webhooks, holiday rules and per-location hours. Queue below.
         </p>
       </div>
       <div class="mt-10 grid md:grid-cols-2 gap-4">

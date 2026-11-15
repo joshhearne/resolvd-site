@@ -9,11 +9,13 @@ export const featureNav: FeatureNavEntry[] = [
   { href: "/consumables/", label: "Consumables",         note: "Supply ledger — toner, drums, batteries" },
   { href: "/kb/",          label: "Knowledge Base",      note: "Built-in per-project KB, optional Trove KB integration" },
   { href: "/alerts/",      label: "Alerts + Rules",      note: "Dedup, rule-driven ticket promotion" },
-  { href: "/sla/",         label: "SLA Tracker",         note: "Clocks, escalations, business hours" },
+  { href: "/sla/",         label: "SLA Tracker",         note: "Clocks, on-call, holidays, breach webhooks" },
+  { href: "/time-billing/", label: "Time + Billing",     note: "Ticket timers, rate cards, contracts, prepaid blocks" },
+  { href: "/status-pages/", label: "Status Pages",       note: "Uptime Kuma services, maintenance windows" },
   { href: "/ai/",          label: "AI Assist",           note: "BYO-AI text rewrite" },
   { href: "/email/",       label: "Email-to-Ticket",     note: "Inbound pipeline + queue" },
   { href: "/vendors/",     label: "Vendor CRM",          note: "Companies, contacts, color-coded threads" },
-  { href: "/integrations/", label: "Integrations",       note: "Trove KB direct integration, Action1, Zabbix, M365, Gmail, AI providers" },
+  { href: "/integrations/", label: "Integrations",       note: "Trove KB, Action1, Zabbix, Uptime Kuma, Slack/Teams/PagerDuty, M365, Gmail" },
 ];
 
 export const featurePrefixes = featureNav.map(f => f.href);

@@ -37,11 +37,18 @@ const banners = [
   { name: "Avanan", note: "Suspicious / external banners" },
 ];
 
-const roadmap = [
+const afterCreate = [
   {
-    tag: "Next",
-    title: "Forward from agent inbox → ticket",
-    body: "Agents forward a user's email into the connected inbox and Resolvd treats the **original sender** as the requestor/submitter, not the forwarding agent. The forwarder becomes the **assigned agent** automatically. If the original message lacked a `#PREFIX`, the agent adds one on forward to route the project. Standard `From:`/`Reply-To:` header parsing on the wrapped message, with the forwarder identified via the connected mailbox owner.",
+    title: "Forwarded mail keeps the real sender",
+    body: "Forward a customer's email into a connected inbox and Resolvd reads the embedded `From:` block. The **original sender** becomes the submitter (a contact is created if needed), and the forwarding agent becomes the assignee and a follower. A `#PREFIX` on the forwarded subject routes it to another project. If the headers don't line up, normal handling takes over, so no ticket is dropped.",
+  },
+  {
+    title: "Apply a form after the fact",
+    body: "Turn an email-created ticket into the right request type with **Apply form**, moving it to the form's project if needed. The submitter's title and description are never overwritten. (v0.11.0)",
+  },
+  {
+    title: "Vendor replies move escalations forward",
+    body: "Add a vendor's ticket ref to an escalated ticket and its external status advances on its own. Inbound review lists the waiting tickets a new message likely unblocks. (v0.11.0)",
   },
 ];
 
@@ -238,24 +245,21 @@ const providers = [
   <section class="border-t border-[var(--color-border)]">
     <div class="mx-auto max-w-5xl px-6 py-20">
       <div class="max-w-2xl">
-        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Roadmap</span>
-        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">What's <span class="text-[var(--color-brand)]">next</span>.</h2>
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">After the ticket lands</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Forwarded, typed, <span class="text-[var(--color-brand)]">followed up</span>.</h2>
         <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
-          Auto-create, helpdesk routing, banner stripping, vendor outbound, and OAuth Microsoft / Gmail adapters all ship today. Queue below.
+          Not every request arrives in the right inbox or the right shape. These close the gap.
         </p>
       </div>
-      <div class="mt-10 grid md:grid-cols-2 gap-4">
-        {roadmap.map(r => (
+      <div class="mt-10 grid md:grid-cols-3 gap-4">
+        {afterCreate.map(r => (
           <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-            <div class="flex items-baseline justify-between gap-3 mb-2">
-              <h3 class="font-semibold text-[var(--color-fg-strong)]">{r.title}</h3>
-              <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)] border border-[var(--color-brand)]/30">{r.tag}</span>
-            </div>
+            <h3 class="font-semibold text-[var(--color-fg-strong)] mb-2">{r.title}</h3>
             <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed" set:html={r.body.replace(/`([^`]+)`/g, '<code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong class="text-[var(--color-fg-strong)]">$1</strong>')}></p>
           </div>
         ))}
       </div>
-      <p class="mt-6 text-xs text-[var(--color-fg-dim)]">Tracked in <a href="https://github.com/joshhearne/resolvd/blob/main/ROADMAP.md" target="_blank" rel="noopener" class="text-[var(--color-brand)] hover:underline">ROADMAP.md</a>. Open an issue if you want a specific beat prioritized.</p>
+      <img src="/blog/v0-11-0/apply-form.png" alt="The Apply form dialog: project, category and form, with a move warning" loading="lazy" class="mt-10 w-full rounded-xl border border-[var(--color-border)]" />
     </div>
   </section>
 

@@ -48,6 +48,8 @@ const ticketSurfaces = [
   { title: "Links + suggestions",  body: "The Trove KB block on every ticket's Knowledge panel: linked articles (title and collection snapshotted so the ticket still reads right if Trove KB is down), title-based suggestions searching the project's mapped collection first, and search-to-link for everything else." },
   { title: "Resolution draft",     body: "Two tiers from the same inputs. An extractive digest, no AI, always: per article the matched passage, link, and runbook steps. An AI summary on top when the caller may use AI Assist — synthesizes ticket + articles into a short write-up with steps citing their source." },
   { title: "Knowledge briefs",     body: "\"Scope with knowledge\" on the comment composer. Resolvd assembles what the user reported, what the team said, the tech's draft and corrections, the project context, and matched articles into a reviewable form. Build without AI by default, or rewrite with AI under rules that keep internal articles out of the reply." },
+  { title: "Insert KB link",       body: "Search Trove KB and local articles from the composer and drop in a link narrowed to a PDF page, a search phrase, or both, so the customer opens the manual on the right paragraph. Local articles can carry a source PDF too." },
+  { title: "Target KB links (AI)", body: "Turns a rough set of KB links into exact page-and-phrase links, optionally as numbered steps. The model only suggests pages and phrases; the server reads the actual document, corrects a wrong page and drops anything it can't find." },
   { title: "Promote-to-KB",        body: "A resolved ticket's fix upserts into the project's collection as an internal-only draft (category = project, subcategory Drafts) keyed `resolvd:ticket:<id>`. Needs the API key's write scope and a write grant on that collection." },
 ];
 
@@ -266,6 +268,7 @@ const setupSteps = [
           Comments that say nothing about the problem — SLA notices, project moves, merges, out-of-office auto-replies — are kept out of a brief by admin-managed rules, not code. A regex, a literal, or a specific account. Built-ins are seeded as rows you can disable, edit, or delete, and a test box shows which rules a pasted comment would trip. System and muted comments are always excluded.
         </p>
       </div>
+      <img src="/blog/v0-11-0/kb-pdf-link.png" alt="A reply with KB links targeted to exact pages of a PDF manual" loading="lazy" class="mt-10 w-full rounded-xl border border-[var(--color-border)]" />
     </div>
   </section>
 

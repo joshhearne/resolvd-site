@@ -1,0 +1,264 @@
+---
+import Layout from "../layouts/Layout.astro";
+import FeatureFooter from "../components/FeatureFooter.astro";
+
+const code = (s: string) =>
+  s.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>');
+
+const rollup = [
+  { components: "None",                               service: "The item's own state." },
+  { components: "All in maintenance",                 service: "`maintenance`" },
+  { components: "A primary component down",           service: "`down`" },
+  { components: "Every non-maintenance component down", service: "`down`" },
+  { components: "Some components down",              service: "`partial`" },
+  { components: "Any pending (nothing down)",         service: "`pending`" },
+  { components: "All unknown",                        service: "`unknown`" },
+  { components: "Otherwise",                          service: "`up`" },
+];
+
+const pageShows = [
+  { label: "Live state",           note: "Per service and component, with uptime, response time and cert days where the source provides them." },
+  { label: "14-day history bar",   note: "Every service and component. Each pip shows the worst state it saw, so a short blip still marks it." },
+  { label: "Active incidents",     note: "Pulled from firing alerts." },
+  { label: "Scheduled maintenance", note: "Upcoming and open windows over the page's items." },
+  { label: "Past 14 days",         note: "Outage episodes (down / partial runs), incidents and maintenance — including outages that never opened a ticket." },
+  { label: "Expand / collapse",    note: "Per service, per section, and for the whole page." },
+];
+
+const kumaFields = [
+  { name: "Webhook",    note: "Kuma *Webhook* notification pointed at the tokenized `/api/webhooks/in/<token>` URL. Kuma's default JSON works as-is. `DOWN` opens an alert, `UP` recovers it." },
+  { name: "API base",   note: "Polled from the Resolvd server. An internal Docker URL such as `http://uptime-kuma:3001` works." },
+  { name: "API key",    note: "Created in Kuma under Settings → API Keys. Stored encrypted." },
+  { name: "Web URL",    note: "Human-facing base for *Open in Uptime Kuma* links, when it differs from the API base." },
+];
+
+const maintenanceFields = [
+  { field: "Starts / Ends",       note: "**End now** closes a window early." },
+  { field: "Affected items",      note: "Items or whole services. Their alerts are recorded but don't open tickets during the window." },
+  { field: "Related ticket",      note: "Optional ticket ref, e.g. `DEV-0010`." },
+  { field: "Project calendar",    note: "Which project feed carries the window — from the affected items, or a specific project." },
+  { field: "Scheduled techs",     note: "Shown on their personal calendar feeds." },
+  { field: "Plan / reason",       note: "Markdown, optional." },
+  { field: "What was done",       note: "Markdown, filled in as you go or afterwards. Shown on status pages as the maintenance log." },
+];
+
+const feeds = [
+  { name: "mine.ics",            who: "Any user",               note: "Maintenance windows and recurring-ticket runs assigned to me." },
+  { name: "all.ics",             who: "Admin / Manager / Tech", note: "All scheduled work." },
+  { name: "project/:prefix.ics", who: "Project access",         note: "One project's work." },
+  { name: "holidays/:id.ics",    who: "Any active user",        note: "A business-hours policy's holidays." },
+];
+---
+
+<Layout title="Status Pages — Resolvd" description="Status pages and maintenance windows fed by Uptime Kuma: services with primary-component rollup, 14-day history bars, outage history, email subscriptions, and calendar feeds for scheduled work.">
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
+      <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
+        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)] shadow-[0_0_8px_var(--color-brand)]"></span>
+        Status pages · new in v0.11.0
+      </span>
+      <h1 class="mt-2 text-4xl md:text-6xl font-bold tracking-tight leading-[1.05]">
+        Is it down? <span class="text-[var(--color-brand)]">Check the page.</span>
+      </h1>
+      <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
+        Uptime Kuma is a first-class alert source. Its monitors become services and components on curated status pages with 14-day history, outage logs and email subscriptions. Maintenance windows hold back tickets while you work and show up on every tech's calendar.
+      </p>
+      <div class="mt-10 flex flex-wrap gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-400/40 bg-emerald-400/10 text-xs font-semibold text-emerald-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span> Operational
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-400/40 bg-amber-400/10 text-xs font-semibold text-amber-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-amber-300"></span> Partial outage
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-rose-400/40 bg-rose-400/10 text-xs font-semibold text-rose-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-rose-300"></span> Down
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-sky-400/40 bg-sky-400/10 text-xs font-semibold text-sky-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-sky-300"></span> Maintenance
+        </span>
+      </div>
+    </div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-[500px] -z-10 opacity-[0.04]" style="background-image: linear-gradient(to right, var(--color-fg-strong) 1px, transparent 1px), linear-gradient(to bottom, var(--color-fg-strong) 1px, transparent 1px); background-size: 32px 32px;"></div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-16">
+      <img src="/blog/v0-11-0/status-page.png" alt="A status page with 14-day history bars and a partial outage on Network & VPN" loading="lazy" class="w-full rounded-xl border border-[var(--color-border)]" />
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Uptime Kuma</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Webhook for alerts. <span class="text-[var(--color-brand)]">Metrics for live state.</span></h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Add a Kuma integration under <strong class="text-[var(--color-fg-strong)]">Admin → Integrations</strong>. Its webhook opens and resolves alerts, promoted to tickets by the source's alert rules. Add an API key and Resolvd reads Kuma's Prometheus <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">/metrics</code> every 55 seconds for each monitor's state, 1-day / 30-day uptime, response time and certificate days.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            <strong class="text-[var(--color-fg-strong)]">Networking.</strong> <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">resolvd-nginx</code> and the backend join a fixed-name Docker network, <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">resolvd-alert-intake</code>. Put the Kuma container on it as an external network so Kuma reaches the webhook and Resolvd can poll Kuma. Postgres isn't on that network.
+          </p>
+          <p class="mt-4 text-xs text-[var(--color-fg-dim)]">Attach the Kuma notification to individual monitors, not groups, or a group and its child will each open a ticket.</p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Setup</span>
+          <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+            {kumaFields.map(f => (
+              <div class="px-5 py-3 flex flex-col md:flex-row md:items-start gap-1 md:gap-3">
+                <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[9ch]">{f.name}</span>
+                <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={code(f.note).replace(/\*([^*]+)\*/g, '<em>$1</em>')}></p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Services + components</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">One primary down <span class="text-[var(--color-brand)]">takes the service down</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            A monitored item can belong to a parent, one level deep and from the same source. The parent is a <strong class="text-[var(--color-fg-strong)]">service</strong>, its children are <strong class="text-[var(--color-fg-strong)]">components</strong>. Kuma group monitors act as services, since webhook payloads link each monitor to its group.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Mark a component <strong class="text-[var(--color-fg-strong)]">primary</strong> on the integration's item list. When a primary component is down, the service is down. When any other component is down, the service shows a partial outage. Components in maintenance count as neither up nor down.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Rollup</span>
+          <div class="mt-2 overflow-x-auto rounded-xl border border-[var(--color-border)]">
+            <table class="w-full text-sm">
+              <thead class="bg-[var(--color-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--color-fg-muted)]">
+                <tr>
+                  <th class="px-4 py-3">Components</th>
+                  <th class="px-4 py-3">Service</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[var(--color-border)]">
+                {rollup.map(r => (
+                  <tr>
+                    <td class="px-4 py-3 text-[var(--color-fg-muted)]">{r.components}</td>
+                    <td class="px-4 py-3 text-[var(--color-fg-muted)]" set:html={code(r.service)}></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Status pages</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Curated views, <span class="text-[var(--color-brand)]">not a monitor dump</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Admins and Managers build pages in an editor with draggable sections and items, expandable services, and a per-item display name. Pull monitored items from any integration. Pages live under <strong class="text-[var(--color-fg-strong)]">Status</strong> in the left rail.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Pages are for signed-in Resolvd users — there's no anonymous public page. Each page is for <strong class="text-[var(--color-fg-strong)]">everyone</strong> or <strong class="text-[var(--color-fg-strong)]">staff only</strong> (Admin, Manager, Tech), and can be limited to members of chosen projects. Admin and Manager always see every page.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">What a page shows</span>
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            {pageShows.map(t => (
+              <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3">
+                <div class="text-xs font-medium text-[var(--color-fg-strong)]">{t.label}</div>
+                <p class="mt-0.5 text-[11px] text-[var(--color-fg-muted)] leading-snug">{t.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Subscriptions</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Email me <span class="text-[var(--color-brand)]">when it breaks</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Any viewer can subscribe to a page they can see: <strong class="text-[var(--color-fg-strong)]">up / down alerts</strong> when a service or component goes down or recovers, and <strong class="text-[var(--color-fg-strong)]">page changes</strong> when a new service is added.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            The notifier runs every minute and sends one email per page per run. A down-and-back within one run reads as a brief outage. Changes during a maintenance window are skipped. Staff-only pages only mail staff, and anyone who loses access stops getting emails.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">History</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Every outage, <span class="text-[var(--color-brand)]">ticket or not</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            History is built from <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">alert_item_state_changes</code>, written by both the poller and the webhook path. The Past 14 days list shows down and partial runs even when alert rules never promoted them to a ticket. Maintenance windows overlay the timeline.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Maintenance windows</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Planned work <span class="text-[var(--color-brand)]">doesn't page anyone</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          Admins, Managers and Techs schedule windows under <strong class="text-[var(--color-fg-strong)]">Maintenance</strong> over items or whole services. While a window is open, alerts for its items are recorded but held back from tickets. Promotion is re-checked when the window ends, or when it's shortened or deleted. Windows show on status pages and in each scheduled tech's calendar feed.
+        </p>
+      </div>
+      <div class="mt-10 grid md:grid-cols-2 gap-8 items-start">
+        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+          {maintenanceFields.map(m => (
+            <div class="px-5 py-3 flex flex-col md:flex-row md:items-start gap-1 md:gap-3">
+              <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[14ch]">{m.field}</span>
+              <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={code(m.note).replace(/\*\*([^*]+)\*\*/g, '<strong class="text-[var(--color-fg-strong)]">$1</strong>')}></p>
+            </div>
+          ))}
+        </div>
+        <img src="/blog/v0-11-0/maintenance-window.png" alt="Scheduling a maintenance window over the Customer Portal service" loading="lazy" class="w-full rounded-xl border border-[var(--color-border)]" />
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Calendar feeds</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Scheduled work <span class="text-[var(--color-brand)]">in Outlook or Google</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            <strong class="text-[var(--color-fg-strong)]">Account settings → Calendar</strong> gives each user subscribable <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">.ics</code> links. Access follows the owner's current role and project membership.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Calendar apps can't sign in, so the token in the URL is the credential. <strong class="text-[var(--color-fg-strong)]">Make new links</strong> regenerates it and revokes every old link; <strong class="text-[var(--color-fg-strong)]">Turn off</strong> revokes it.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Feeds</span>
+          <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+            {feeds.map(f => (
+              <div class="px-5 py-3">
+                <div class="flex items-baseline justify-between gap-3">
+                  <code class="font-mono text-xs text-[var(--color-brand)]">{f.name}</code>
+                  <span class="text-[11px] text-[var(--color-fg-dim)]">{f.who}</span>
+                </div>
+                <p class="mt-1 text-sm text-[var(--color-fg-muted)] leading-relaxed">{f.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <FeatureFooter currentHref="/status-pages/" heading="Point Kuma at Resolvd." subhead="Admin → Integrations → Uptime Kuma. Group your monitors into services, build a page, and schedule your next maintenance window." />
+</Layout>

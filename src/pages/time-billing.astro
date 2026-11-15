@@ -1,0 +1,283 @@
+---
+import Layout from "../layouts/Layout.astro";
+import FeatureFooter from "../components/FeatureFooter.astro";
+
+const code = (s: string) =>
+  s.replace(/`([^`]+)`/g, '<code class="text-xs px-1 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">$1</code>');
+
+const timerRules = [
+  { evt: "Tech takes the ticket", action: "Timer auto-starts (default on). Only when the tech is solo on the ticket: unassigned or theirs, no one else timing it, not in a terminal status." },
+  { evt: "Tech opens the ticket", action: "Optional auto-start (default off). Pair it with the discard rule." },
+  { evt: "Another timer starts", action: "Your other running timer pauses. One timer per tech per ticket." },
+  { evt: "Status → hold / Resolved / terminal", action: "Timer pauses on its own (`awaiting_input`, `on_hold`, `resolved_pending_close`, terminal). Nothing auto-resumes, so a reply on a held ticket doesn't restart the clock." },
+  { evt: "Tech leaves without logging", action: "If the status hasn't changed since the timer started, the timer is discarded. Default: auto-started timers only. Options: all timers, or never." },
+  { evt: "Unlogged time passes the limit", action: "After `warn_after_minutes` (default 30) with nothing logged, the timer turns amber and the tech gets one in-app notification." },
+];
+
+const billableRules = [
+  { name: "Rounding", note: "Round each session to 5, 6, 10, 15 or 30 minutes (or not at all). Up, nearest or down." },
+  { name: "Session minimum", note: "Each billable entry counts as at least 0–480 minutes." },
+  { name: "Ticket minimum", note: "Once per ticket or once per day of work. The difference bills as its own top-up line." },
+  { name: "Billable by default", note: "Org-wide default, and each work type's billable flag seeds new entries of that type." },
+  { name: "Overlap guard", note: "Warn and confirm, block, or allow when a tech's entries overlap." },
+  { name: "Timesheet lock", note: "After N days, only Admin / Manager can change or delete an entry." },
+  { name: "Re-pricing", note: "Re-price all time not yet invoiced, or keep each entry at the rules in force when it was logged." },
+  { name: "Approval", note: "Optional. Billable time waits for Admin / Manager sign-off, then locks for techs." },
+];
+
+const billTypes = [
+  { name: "hourly",        label: "Hourly (time & materials)",   note: "Billable minutes × rate." },
+  { name: "prepaid_block", label: "Prepaid block",               note: "Minutes draw down the contract's block, per term or per month. The rest bills as overage at the rate." },
+  { name: "covered",       label: "Covered (managed / flat fee)", note: "Tracked and counted, billed at $0." },
+  { name: "non_billable",  label: "Non-billable",                note: "Nothing on the contract is billable." },
+];
+
+const contractFields = [
+  { label: "Bill type", note: "Required. Carries its external code for your accounting system." },
+  { label: "Rate card", note: "Optional. Blank uses the default card." },
+  { label: "Term", note: "Starts on / ends on. Blank end = open-ended. Latest start wins on overlap." },
+  { label: "Block hours", note: "For prepaid blocks: one block per term, or a fresh block every month." },
+  { label: "External ref", note: "Accounting contact or contract id, carried on exports." },
+  { label: "Block alerts", note: "Admins and Managers notified at N % used (default 80) and again when the block runs out." },
+];
+
+const exportCols = [
+  "customer", "contract", "external ref", "bill type", "bill type code", "rate", "coverage", "amount",
+];
+
+const roadmap = [
+  { tag: "Not yet", title: "Xero / QuickBooks invoice export", body: "Invoice export and sync. Only billable (and, where used, approved) time, each priced line snapshotted at invoice time so later rule or rate changes never re-price invoiced work." },
+  { tag: "Not yet", title: "Products and line items", body: "Recurring contract fees, hardware, mileage and other expenses alongside billed time." },
+];
+---
+
+<Layout title="Time Tracking + MSP Billing — Resolvd" description="Per-ticket timers with auto-start, pause and discard rules, private-by-default work notes, billable-hours rules, weekly timesheets, and MSP billing with rate cards, contracts, prepaid blocks, approvals and utilization.">
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-4xl px-6 pt-20 pb-12 md:pt-28">
+      <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
+        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)] shadow-[0_0_8px_var(--color-brand)]"></span>
+        Time tracking + MSP billing · new in v0.11.0
+      </span>
+      <h1 class="mt-2 text-4xl md:text-6xl font-bold tracking-tight leading-[1.05]">
+        Track the time. <span class="text-[var(--color-brand)]">Bill it to the cent.</span>
+      </h1>
+      <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
+        Every ticket has a timer that starts when a tech takes it and pauses when the ticket waits. Work notes are private by default and billable is a separate flag. Turn on MSP mode and the same time prices itself through rate cards, contracts and prepaid blocks, ready for your accounting system.
+      </p>
+      <div class="mt-10 flex flex-wrap gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-400/40 bg-emerald-400/10 text-xs font-semibold text-emerald-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span> Running
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-400/40 bg-amber-400/10 text-xs font-semibold text-amber-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-amber-300"></span> Unlogged
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-sky-400/40 bg-sky-400/10 text-xs font-semibold text-sky-300 tracking-wider uppercase">
+          <span class="h-1.5 w-1.5 rounded-full bg-sky-300"></span> Approved
+        </span>
+      </div>
+    </div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-[500px] -z-10 opacity-[0.04]" style="background-image: linear-gradient(to right, var(--color-fg-strong) 1px, transparent 1px), linear-gradient(to bottom, var(--color-fg-strong) 1px, transparent 1px); background-size: 32px 32px;"></div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Timers</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Starts on its own. <span class="text-[var(--color-brand)]">Never resumes behind your back.</span></h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          On desktop the timer docks in the ticket header under <strong class="text-[var(--color-fg-strong)]">Follow</strong>; on phones it sits inline. Running and paused timers are listed in the header's timer pill. Auto-start and discard behavior are admin-set under <strong class="text-[var(--color-fg-strong)]">Admin → Time tracking</strong>.
+        </p>
+      </div>
+      <div class="mt-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+        {timerRules.map(l => (
+          <div class="px-5 py-4 flex flex-col md:flex-row md:items-start gap-1.5 md:gap-4">
+            <span class="font-mono text-xs text-[var(--color-brand)] md:mt-0.5 md:shrink-0 md:min-w-[22ch]">{l.evt}</span>
+            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed md:flex-1" set:html={code(l.action)}></p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Logging</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Any two of <span class="text-[var(--color-brand)]">start, duration, stop</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            The log form derives the third. Logging needs a work note (10 characters by default) and an optional work type such as Remote, Onsite or Travel. <strong class="text-[var(--color-fg-strong)]">Log &amp; &lt;status&gt;</strong> logs the entry and moves the ticket in one step.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Logged minutes are the time actually worked and are never rewritten. Billing rules derive billable minutes from them on read. AI rewrite tidies a work note into plain, past-tense facts without inventing work.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Work notes</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Private <span class="text-[var(--color-brand)]">by default</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            A work note saves as a handler-only note, never sent to the requester or vendors. Admins can make public comments the default, and decide whether only Admins and Managers or any handler picks per entry.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Visibility and billing are separate. A public note isn't automatically billable, and a private one isn't excluded from billing, so nothing lands on an invoice by accident.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Billable hours</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your rules, <span class="text-[var(--color-brand)]">applied on read</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          Per ticket, each billable session is rounded, then raised to the session minimum; the ticket (or day) total is then raised to the ticket minimum. A preview box prices sample sessions with the current settings before you save.
+        </p>
+      </div>
+      <div class="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {billableRules.map(r => (
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div class="text-sm font-medium text-[var(--color-fg-strong)] mb-1.5">{r.name}</div>
+            <p class="text-xs text-[var(--color-fg-muted)] leading-relaxed">{r.note}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Timesheets</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">A week per tech, <span class="text-[var(--color-brand)]">at a glance</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            <strong class="text-[var(--color-fg-strong)]">Time → Timesheet</strong> shows a Monday-to-Sunday week of entries by day, with weekly total, billable total and entry count. Admins and Managers can switch to any tech.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            CSV export under <strong class="text-[var(--color-fg-strong)]">Admin → Time tracking → Export time</strong> covers logged and billable minutes, with ticket-minimum top-ups as their own rows. Cells starting with <code class="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-brand)]">= + - @</code> are neutralized so notes can't run as spreadsheet formulas.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Hours per asset</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Which machine <span class="text-[var(--color-brand)]">eats the hours?</span></h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Each <a href="/inventory/" class="text-[var(--color-brand)] hover:underline">inventory</a> asset shows <strong class="text-[var(--color-fg-strong)]">Time on this asset</strong>: the last 30 days, last 90 days and all time, per tech, and by month for the last 12. Its ticket list shows time per ticket, and in MSP mode Admins and Managers see the billed amount too.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">MSP mode</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Billing stays hidden <span class="text-[var(--color-brand)]">until you need it</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          Turn it on under <strong class="text-[var(--color-fg-strong)]">Admin → Branding → Customer companies</strong>. Companies gain the customer kind, with Contacts, Locations, Projects and Billing tabs. Turning it off hides billing again; nothing is deleted. Pricing runs in integer cents, so the ticket view, export and report agree to the cent.
+        </p>
+      </div>
+      <div class="mt-10 grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Rate cards</span>
+          <h3 class="mt-2 text-2xl font-bold tracking-tight">After-hours and weekends <span class="text-[var(--color-brand)]">price themselves</span>.</h3>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            A base hourly rate with after-hours and weekend multipliers. After-hours is judged against each project's business hours, so a whole-day holiday prices at the weekend rate and time after an early close prices as after-hours.
+          </p>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Overrides price a work type, a tech, or a tech doing a work type. The most specific match wins: tech + work type → work type → tech → base rate.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Bill types</span>
+          <div class="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+            {billTypes.map(b => (
+              <div class="px-5 py-3">
+                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <code class="font-mono text-xs text-[var(--color-brand)]">{b.name}</code>
+                  <span class="text-sm font-medium text-[var(--color-fg-strong)]">{b.label}</span>
+                </div>
+                <p class="mt-1 text-sm text-[var(--color-fg-muted)] leading-relaxed">{b.note}</p>
+              </div>
+            ))}
+          </div>
+          <p class="mt-3 text-xs text-[var(--color-fg-dim)]">Each bill type takes an optional external code for your accounting system. A customer with no contract in force bills hourly at the default rate card.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Contracts</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Prepaid blocks that <span class="text-[var(--color-brand)]">draw down across every ticket</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          Contracts live on <strong class="text-[var(--color-fg-strong)]">Admin → Companies → {"{customer}"} → Billing</strong>. A ticket bills to the customer its project is linked to, or to a customer picked on the ticket when a project serves several. Each unit of time prices under the contract in force on its date.
+        </p>
+      </div>
+      <div class="mt-8 grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {contractFields.map(f => (
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div class="text-sm font-medium text-[var(--color-fg-strong)] mb-1.5">{f.label}</div>
+            <p class="text-xs text-[var(--color-fg-muted)] leading-relaxed">{f.note}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Approvals</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Sign off <span class="text-[var(--color-brand)]">in bulk</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            Optional. <strong class="text-[var(--color-fg-strong)]">Time → Approvals</strong> lists billable, uninvoiced time by ticket or by entry, filtered by date, approval state, ticket status, tech and customer. Each row carries its priced line, so the approver sees what they're signing off. Approved time locks for techs.
+          </p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Utilization + export</span>
+          <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Ready for <span class="text-[var(--color-brand)]">your accounting system</span>.</h2>
+          <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+            The utilization report shows, per tech, time logged, billable and non-billable minutes, utilization (billable ÷ logged) and the billed amount. In MSP mode the CSV export adds these columns, optionally limited to approved time:
+          </p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            {exportCols.map(c => (
+              <code class="font-mono text-xs px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-brand)]">{c}</code>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)]">
+    <div class="mx-auto max-w-5xl px-6 py-20">
+      <div class="max-w-2xl">
+        <span class="text-xs uppercase tracking-wider text-[var(--color-fg-dim)] font-semibold">Roadmap</span>
+        <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">What's <span class="text-[var(--color-brand)]">not here yet</span>.</h2>
+        <p class="mt-4 text-[var(--color-fg-muted)] leading-relaxed">
+          v0.11.0 prices and exports time. There's no invoicing yet; when it lands, invoiced time will be frozen at what it was billed.
+        </p>
+      </div>
+      <div class="mt-10 grid md:grid-cols-2 gap-4">
+        {roadmap.map(r => (
+          <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+            <div class="flex items-baseline justify-between gap-3 mb-2">
+              <h3 class="font-semibold text-[var(--color-fg-strong)]">{r.title}</h3>
+              <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-[var(--color-fg-dim)]/10 text-[var(--color-fg-dim)] border border-[var(--color-border)] shrink-0">{r.tag}</span>
+            </div>
+            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">{r.body}</p>
+          </div>
+        ))}
+      </div>
+      <p class="mt-6 text-xs text-[var(--color-fg-dim)]">Tracked in <a href="https://github.com/joshhearne/resolvd/blob/main/ROADMAP.md" target="_blank" rel="noopener" class="text-[var(--color-brand)] hover:underline">ROADMAP.md</a>. Full reference in the <a href="/docs/v0.11.0/time-tracking/" class="text-[var(--color-brand)] hover:underline">time tracking</a> and <a href="/docs/v0.11.0/billing/" class="text-[var(--color-brand)] hover:underline">MSP billing</a> docs.</p>
+    </div>
+  </section>
+
+  <FeatureFooter currentHref="/time-billing/" heading="Start the clock." subhead="Admin → Time tracking. Set the timer rules, then flip on MSP mode when you're ready to bill." />
+</Layout>
