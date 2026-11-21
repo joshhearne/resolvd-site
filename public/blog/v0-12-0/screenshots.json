@@ -1,0 +1,94 @@
+{
+  "_comment": "v0.12.0 blog shots against the demo (:8091). Slugs match image refs in src/content/blog/v0-12-0.md. Data comes from the v0.12.0 block in release-ops/products/resolvd/seed-demo.sql: the Temporary password formula field on Jane Roe's onboarding ticket (ACME-0008, id 24), disabled user Theo Brandt, and two assets from a removed integration (ACME-OLD-LT07/LT09). Plan css hides the header timer pill (the seed starts a timer on ACME-0004 for the time-tracking shots).",
+  "baseURL": "http://localhost:8091",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "deviceScaleFactor": 2,
+  "auth": {
+    "url": "/login",
+    "steps": [
+      {
+        "fill": "input[type=email]",
+        "value": "${DEMO_EMAIL}"
+      },
+      {
+        "fill": "input[type=password]",
+        "value": "${DEMO_PASSWORD}"
+      },
+      {
+        "wait": 1100
+      },
+      {
+        "press": "Enter"
+      },
+      {
+        "waitForURL": "**/dashboard"
+      },
+      {
+        "eval": "fetch('/api/whats-new/unseen').then(r => r.json()).then(d => Promise.all((d.releases || []).map(x => fetch('/api/whats-new/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ release_id: x.id }) }))))"
+      },
+      {
+        "wait": 300
+      }
+    ]
+  },
+  "shots": [
+    {
+      "name": "formula-password",
+      "url": "/tickets/24",
+      "actions": [
+        {
+          "waitFor": "h2:has-text('Custom Fields')"
+        },
+        {
+          "eval": "(() => { const h = [...document.querySelectorAll('h2')].find(h => h.textContent.trim() === 'Custom Fields'); if (h) { h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -96); } })()"
+        },
+        {
+          "wait": 600
+        }
+      ],
+      "clip": {
+        "x": 1000,
+        "y": 95,
+        "width": 360,
+        "height": 735
+      }
+    },
+    {
+      "name": "inventory-bulk-actions",
+      "url": "/inventory",
+      "actions": [
+        {
+          "waitFor": "input[aria-label='Select ACME-OLD-LT07']"
+        },
+        {
+          "click": "input[aria-label='Select ACME-OLD-LT07']"
+        },
+        {
+          "click": "input[aria-label='Select ACME-OLD-LT09']"
+        },
+        {
+          "wait": 600
+        }
+      ]
+    },
+    {
+      "name": "admin-users-disabled",
+      "url": "/admin/users",
+      "actions": [
+        {
+          "waitFor": "label:has-text('Show disabled') input[type=checkbox]"
+        },
+        {
+          "click": "label:has-text('Show disabled') input[type=checkbox]"
+        },
+        {
+          "wait": 600
+        }
+      ]
+    }
+  ],
+  "css": "[title=\"Your timers\"] { display: none !important; }"
+}
