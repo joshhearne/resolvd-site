@@ -114,7 +114,7 @@ Review every image yourself before showing the user. See `references/screenshots
 - **Site:** `npx astro build && (npx astro preview --host 127.0.0.1 --port 4322 &)`, then Playwright full-page captures of `/blog/<tag-dashes>/` (1280 and 390 wide), `/docs/<tag>/`, and changed feature pages; send with `SendUserFile` (display `render`).
 - **Help:** `DEMO_BRANCH=docs/<tag>-help APP_VERSION=<tag> scripts/cloud/demo-up.sh` (rebuilds the demo from the help branch, keeps the DB), then capture `/help` sections the release touched.
 - A contact sheet of every new image.
-- Live link if wanted: push site work to a non-`main` branch; Cloudflare Pages builds a branch preview if previews are on for the project.
+- **Live link:** push the site work to a non-`main` branch (e.g. `release/<tag>-site`). Cloudflare Pages (project `resolvd-dev`) builds it and comments on the PR with a branch preview, `https://<branch-with-dashes>.resolvd-dev.pages.dev`. Give the user that link: it works from a phone. Merge or push to `main` only with approval.
 
 Loop on reshoot/edit requests until approved. Small UI bugs spotted in screenshots go into the Help PR as a separate commit.
 
