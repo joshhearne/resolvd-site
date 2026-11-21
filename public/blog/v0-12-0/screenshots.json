@@ -1,5 +1,5 @@
 {
-  "_comment": "v0.12.0 blog shots against the demo (:8091). Slugs match image refs in src/content/blog/v0-12-0.md. Data comes from the v0.12.0 block in release-ops/products/resolvd/seed-demo.sql: the Temporary password formula field on Jane Roe's onboarding ticket (ACME-0008, id 24), disabled user Theo Brandt, and two assets from a removed integration (ACME-OLD-LT07/LT09). Plan css hides the header timer pill (the seed starts a timer on ACME-0004 for the time-tracking shots).",
+  "_comment": "v0.12.0 blog shots against the demo (:8091). Slugs match image refs in src/content/blog/v0-12-0.md. Data comes from the v0.12.0 block in release-ops/products/resolvd/seed-demo.sql: the Temporary password formula field on Jane Roe's onboarding ticket (ACME-0008, id 24), and two assets from a removed integration (ACME-OLD-LT07/LT09). Plan css hides the header timer pill (the seed starts a timer on ACME-0004 for the time-tracking shots). Screenshots only for additions (feature change files), not fixes or improvements.",
   "baseURL": "http://localhost:8091",
   "viewport": {
     "width": 1440,
@@ -68,21 +68,6 @@
         },
         {
           "click": "input[aria-label='Select ACME-OLD-LT09']"
-        },
-        {
-          "wait": 600
-        }
-      ]
-    },
-    {
-      "name": "admin-users-disabled",
-      "url": "/admin/users",
-      "actions": [
-        {
-          "waitFor": "label:has-text('Show disabled') input[type=checkbox]"
-        },
-        {
-          "click": "label:has-text('Show disabled') input[type=checkbox]"
         },
         {
           "wait": 600
