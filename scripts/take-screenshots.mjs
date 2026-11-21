@@ -7,6 +7,9 @@
 //   node scripts/take-screenshots.mjs <tag>                   # take all shots
 //   node scripts/take-screenshots.mjs <tag> --only foo,bar    # take only named shots (reshoot)
 //   node scripts/take-screenshots.mjs <tag> --headed          # visible browser (debugging)
+//   node scripts/take-screenshots.mjs --plan scripts/help/screenshots-help.json [--only a,b]
+//       # any plan file; PNGs go to the plan's "outDir" (relative to this repo,
+//       # e.g. "../resolvd/frontend/public/help" for the in-app Help page)
 //
 // Plan schema (JSON):
 //   {
@@ -50,15 +53,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
 function parseArgs(argv) {
-  const args = { tag: null, only: null, headed: false };
+  const args = { tag: null, plan: null, only: null, headed: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--only') args.only = argv[++i].split(',').map(s => s.trim()).filter(Boolean);
     else if (a === '--headed') args.headed = true;
+    else if (a === '--plan') args.plan = argv[++i];
     else if (!a.startsWith('--')) args.tag = a;
   }
-  if (!args.tag) {
-    console.error('usage: node scripts/take-screenshots.mjs <tag> [--only name1,name2] [--headed]');
+  if (!args.tag && !args.plan) {
+    console.error('usage: node scripts/take-screenshots.mjs <tag> | --plan <file> [--only name1,name2] [--headed]');
     process.exit(2);
   }
   return args;
@@ -125,11 +129,21 @@ async function takeShot(context, plan, shot) {
   const page = await context.newPage();
   const vp = shot.viewport || plan.viewport;
   if (vp) await page.setViewportSize(vp);
+  // Plan-level "css" is injected into every page (e.g. to hide a pop-up),
+  // unless the shot sets "planCss": false.
+  if (plan.css && shot.planCss !== false) {
+    await page.addInitScript((css) => {
+      const add = () => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); };
+      if (document.head) add(); else document.addEventListener('DOMContentLoaded', add);
+    }, plan.css);
+  }
   const url = (plan.baseURL || '') + shot.url;
-  await page.goto(url, { waitUntil: 'networkidle' });
+  const res = await page.goto(url, { waitUntil: 'networkidle' });
+  // A 404 page can still pass the waits, so a stale url would otherwise "succeed".
+  if (res && res.status() >= 400) throw new Error(`${shot.url} returned ${res.status()}`);
   for (const step of shot.actions || []) await runStep(page, step);
   if (shot.preDelay) await page.waitForTimeout(shot.preDelay);
-  const outDir = join(ROOT, 'public', 'blog', plan._tag);
+  const outDir = plan._outDir || join(ROOT, 'public', 'blog', plan._tag);
   await mkdir(outDir, { recursive: true });
   const out = join(outDir, `${shot.name}.png`);
   const opts = { path: out };
@@ -144,7 +158,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   await loadDotenv();
 
-  const planPath = join(ROOT, 'public', 'blog', args.tag, 'screenshots.json');
+  const planPath = args.plan ? resolve(process.cwd(), args.plan) : join(ROOT, 'public', 'blog', args.tag, 'screenshots.json');
   try { await access(planPath); }
   catch {
     console.error(`plan not found: ${planPath}`);
@@ -152,6 +166,10 @@ async function main() {
   }
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   plan._tag = args.tag;
+  if (args.plan) {
+    if (!plan.outDir) { console.error(`${planPath} needs an "outDir"`); process.exit(2); }
+    plan._outDir = resolve(ROOT, plan.outDir);
+  }
 
   let shots = plan.shots || [];
   if (args.only) {
