@@ -16,7 +16,7 @@ References (read at that phase): `references/demo.md`, `references/screenshots.m
 | Repo | Path | Role |
 |---|---|---|
 | App | `/home/user/resolvd` | `joshhearne/resolvd`. feature → `dev` → `main`. Tag on `main`. |
-| Site | `/home/user/resolvd-site` | `joshhearne/resolvd-site` (this repo, **public**). Blog, docs, the screenshot runner, the cloud demo scripts and demo seed. Commits to `main`. |
+| Site | `/home/user/resolvd-site` | `joshhearne/resolvd-site` (this repo, private). Blog, docs, the screenshot runner, the cloud demo scripts and demo seed. Commits to `main`. |
 | Demo | `/home/user/resolvd-demo` | Created by `scripts/cloud/demo-up.sh`: a clone of the app. Not the `joshhearne/resolvd-demo` GitHub repo, which the cloud flow doesn't need. |
 
 `<tag-dashes>` = `v0-12-0`. Clones are shallow: fetch by name (`git fetch --depth 200 --tags origin +refs/heads/dev:refs/remotes/origin/dev`).
@@ -28,7 +28,7 @@ References (read at that phase): `references/demo.md`, `references/screenshots.m
 - **Docker** isn't running at start and build containers don't trust the session proxy: go through `scripts/cloud/demo-up.sh` / `cloud-build.sh`. Those images carry the proxy CA: never push them.
 - **Pushes:** site `main`, app branches, and tags are explicit per-step approvals.
 - **Commits and PRs:** en-US, **no `Co-Authored-By` or `Claude-Session` trailer** (user rule beats the session's attribution reminder). PR bodies end with the "🤖 Generated with Claude Code" line.
-- **Public repo:** nothing secret in skills, plans or seed (generated passwords live in the git-ignored `.env`).
+- **Secrets:** nothing secret in skills, plans or seed; generated passwords live in the git-ignored `.env`.
 
 ## Phase 0 — Session setup
 

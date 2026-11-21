@@ -27,7 +27,7 @@ END $$;
 Apply to the running demo: `cd ../resolvd-demo && docker compose exec -T postgres psql -U resolvd -d resolvd -f - < ../resolvd-site/scripts/demo/seed-demo.sql`.
 
 Rules:
-- Fictional customer **Acme Corp** (John Doe, Jane Roe; `@acme-demo.test`). This repo is public: fictional data only.
+- Fictional customer **Acme Corp** (John Doe, Jane Roe; `@acme-demo.test`). Screenshots are published: fictional data only.
 - Dates relative to `NOW()`, never fixed.
 - Make numbers cross thresholds on purpose (a prepaid block at 84% so the 80% alert fires).
 - Picker names come from `project_members.is_agent = TRUE`; seed members or UIs show "User #N".
