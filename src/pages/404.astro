@@ -1,0 +1,76 @@
+---
+/**
+ * Without this file Cloudflare Pages falls back to index.html and answers every
+ * unknown path with 200 + the home page — a soft 404. Scanners probing for
+ * /wp-admin, /.env and friends read that as "it exists" and keep hammering.
+ * Astro emits this as 404.html and Pages serves it with a real 404 status.
+ */
+import Layout from "../layouts/Layout.astro";
+
+const links = [
+  { href: "/", label: "Home", hint: "What Resolvd is" },
+  { href: "/install/", label: "Install", hint: "Docker in five minutes" },
+  { href: "/docs/", label: "Docs", hint: "Guides & reference" },
+  { href: "/manual/", label: "Manual", hint: "Using Resolvd day to day" },
+  { href: "/changelog/", label: "Changelog", hint: "What shipped, when" },
+  { href: "/blog/", label: "Blog", hint: "Release notes" },
+];
+---
+
+<Layout title="404 — Page not found · Resolvd" description="That page doesn't exist on resolvd.dev." noindex>
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-3xl px-6 pt-20 pb-24 md:pt-28">
+      <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-fg-muted)]">
+        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-fg-dim)]"></span>
+        404
+      </span>
+      <h1 class="mt-2 text-4xl md:text-6xl font-bold tracking-tight leading-[1.05]">
+        Nothing to <span class="text-[var(--color-brand)]">resolve</span> here.
+      </h1>
+      <p class="mt-6 text-lg text-[var(--color-fg-muted)] leading-relaxed">
+        That page doesn't exist. The link may be stale, or the URL picked up a typo on the way in.
+      </p>
+
+      <!-- The ticket -->
+      <div class="mt-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="font-mono text-sm text-[var(--color-fg-dim)]">#404</span>
+            <span class="font-semibold text-[var(--color-fg-strong)] truncate">Requested page not found</span>
+          </div>
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-strong)] px-2.5 py-0.5 font-mono text-xs text-[var(--color-fg-muted)]">
+            <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-fg-dim)]"></span>
+            Closed · won't fix
+          </span>
+        </div>
+        <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 px-5 py-4 font-mono text-sm">
+          <dt class="text-[var(--color-fg-dim)]">path</dt>
+          <dd class="text-[var(--color-fg)] break-all" id="nf-path">—</dd>
+          <dt class="text-[var(--color-fg-dim)]">status</dt>
+          <dd class="text-[var(--color-fg)]">404 Not Found</dd>
+          <dt class="text-[var(--color-fg-dim)]">resolution</dt>
+          <dd class="text-[var(--color-brand)]">try one of the links below</dd>
+        </dl>
+      </div>
+
+      <ul class="mt-6 grid gap-3 sm:grid-cols-2">
+        {links.map((l) => (
+          <li>
+            <a href={l.href} class="group flex items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 transition-colors hover:border-[var(--color-brand)]/60">
+              <span>
+                <span class="block font-semibold text-[var(--color-fg-strong)]">{l.label}</span>
+                <span class="block text-sm text-[var(--color-fg-muted)]">{l.hint}</span>
+              </span>
+              <span class="font-mono text-[var(--color-fg-dim)] transition-colors group-hover:text-[var(--color-brand)]" aria-hidden="true">→</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-[400px] -z-10 opacity-[0.04]" style="background-image: linear-gradient(to right, var(--color-fg-strong) 1px, transparent 1px), linear-gradient(to bottom, var(--color-fg-strong) 1px, transparent 1px); background-size: 32px 32px;"></div>
+  </section>
+
+  <script is:inline>
+    document.getElementById("nf-path").textContent = location.pathname;
+  </script>
+</Layout>
