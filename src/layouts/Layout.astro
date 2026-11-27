@@ -6,11 +6,14 @@ import Footer from "../components/Footer.astro";
 interface Props {
   title?: string;
   description?: string;
+  /** Keep this page out of search indexes (404 etc.). */
+  noindex?: boolean;
 }
 
 const {
   title = "Resolvd — self-hosted issue tracking",
   description = "Lightweight, self-hosted issue and project tracking. Docker-first, your data stays yours.",
+  noindex = false,
 } = Astro.props;
 const ogImage = new URL("/og-image.png", Astro.site ?? "https://resolvd.dev").toString();
 ---
@@ -26,6 +29,7 @@ const ogImage = new URL("/og-image.png", Astro.site ?? "https://resolvd.dev").to
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
